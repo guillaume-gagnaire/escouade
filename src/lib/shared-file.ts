@@ -44,7 +44,7 @@ export interface PendingCommand {
 /** The commands of the file waiting for approval, by group (worktree setup, teardown, launch, tests), in that order. */
 export function pendingGroups(
   p: Project | undefined | null,
-): { kind: 'setup' | 'teardown' | 'launch' | 'test'; commands: PendingCommand[] }[] {
+): { kind: 'setup' | 'teardown' | 'launch' | 'test' | 'page'; commands: PendingCommand[] }[] {
   const pending = sharedFile(p)?.pending;
   if (!pending) return [];
   const list = (v: unknown): PendingCommand[] =>
@@ -59,12 +59,19 @@ export function pendingGroups(
     { kind: 'teardown' as const, key: 'worktrees.teardown' },
     { kind: 'launch' as const, key: 'launch' },
     { kind: 'test' as const, key: 'board.test_command' },
+    // « Page à soi » (AP-7): no command, but the file's page waits for the same trust.
+    { kind: 'page' as const, key: 'pages.custom' },
   ];
   return groups
     .filter((g) => g.key in pending.commands)
     .map((g) => {
       const v = pending.commands[g.key];
-      const commands = g.kind === 'test' ? (String(v ?? '').trim() ? [{ name: '', command: String(v), cwd: '', shell: '' }] : []) : list(v);
+      const commands =
+        g.kind === 'test' || g.kind === 'page'
+          ? String(v ?? '').trim()
+            ? [{ name: '', command: String(v), cwd: '', shell: '' }]
+            : []
+          : list(v);
       return { kind: g.kind, commands };
     });
 }

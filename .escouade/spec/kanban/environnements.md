@@ -58,6 +58,10 @@ Après le merge, Escouade suit les déploiements du dépôt chez son hébergeur 
 - Vercel, Netlify, Cloudflare Pages… posent sur la PR un déploiement ou un check avec une adresse. Sur la carte « En revue », « Ouvrir l'aperçu » l'ouvre dans le navigateur.
 - L'aperçu est un déploiement réussi de la branche de la PR qui a une adresse (un aperçu d'abord, production en dernier), sinon un check réussi d'un hébergeur d'aperçus (Vercel, Netlify, Cloudflare, Pages, Render, Surge, Amplify, « preview ») qui a une adresse. Une PR venue d'un fork n'en a pas.
 
+### Chez les agents
+
+- Une même lecture dit aussi, pour chaque agent non archivé, les déploiements d'un commit de sa propre branche (ses commits absents de la cible, 200 au plus, la cible prise où elle est connue), le plus récent par environnement, aperçus compris. Le *Workspace* les pose dans la zone d'atterrissage de l'agent. Un agent sur plusieurs dépôts, ou dont git ne connaît pas le dossier ou la cible, n'en a pas.
+
 ### Le rafraîchissement
 
 - Pas de webhook. Les environnements se lisent dans la même boucle que les PR des tickets « En revue » : toutes les minutes fenêtre devant, toutes les 5 minutes sinon, et tout de suite quand la fenêtre revient. L'aperçu se lit avec la PR, d'un appel de plus.

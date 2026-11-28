@@ -212,7 +212,7 @@ describe('its states', () => {
     expect(screen.getByRole('button', { name: 'Relancer' })).toBeTruthy();
     await tick();
     await new Promise((r) => requestAnimationFrame(r));
-    expect(b.called('devpage_place').at(-1)?.args).toEqual({ agentId: 'a7', bounds: null });
+    expect(b.called('devpage_place').at(-1)?.args).toEqual({ agentId: 'a7', bounds: null, placement: 'hidden' });
   });
 
   it('says the launch is starting again', () => {

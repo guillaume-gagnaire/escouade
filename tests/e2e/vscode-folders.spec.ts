@@ -26,7 +26,8 @@ test('a worktree picked right after the view opened comes to the explorer, even 
   await addProject(page, app.repo, { worktrees: true });
   await expect(page.locator('aside.side .agent')).toHaveCount(1, { timeout: 30_000 });
   await page.evaluate(([key, f]) => localStorage.setItem(key as string, JSON.stringify(f)), ['escouade.test.vscodeFolders', FAULT]);
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   const view = page.getByTestId('vscode-view');
   const wb = workbench(page);
   await expect(wb).toBeVisible({ timeout: 60_000 });
@@ -65,7 +66,8 @@ test('the first agent made late does not take the editor a test opened on the pr
     };
   });
   await addProject(page, app.repo, { worktrees: true });
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await page.evaluate(() => (window as unknown as { releaseAgent?: () => void }).releaseAgent?.());
   const view = page.getByTestId('vscode-view');
   const wb = workbench(page);

@@ -17,6 +17,7 @@
   import OnlineVoiceField from './OnlineVoiceField.svelte';
   import Row from './Row.svelte';
   import Icon from '../Icon.svelte';
+  import MicSensitivity from './MicSensitivity.svelte';
 
   // Réglages › Voix, the conversation's part (ESC-97): the voice of each language among those whose licence allows it,
   // « Écouter », its download (size, progress) and its deletion, its licences and the credit it asks for; the pace, the
@@ -264,6 +265,7 @@
       <span class="meta mono">{t('voice.speech.seconds', { n: (s.silenceMs / 1000).toFixed(1) })}</span>
     </div>
   </Row>
+  <MicSensitivity />
 </Group>
 
 <style>

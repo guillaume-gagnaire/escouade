@@ -31,3 +31,5 @@ apps/mobile-plugin/dist
 # The phone's native projects (apps/mobile, MO-1): Capacitor's own files, their builds and the page Capacitor copies in.
 apps/mobile/android
 apps/mobile/ios
+# What's up ?: copied as is from the osho-whats-up plugin (its version line), so an upgrade is a copy.
+public/whats-up/whats-up.js

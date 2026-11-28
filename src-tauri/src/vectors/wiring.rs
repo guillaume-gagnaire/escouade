@@ -3,7 +3,7 @@
 
 use super::model::{Spec, Store, MODEL, MODEL_URL};
 use crate::core::Core;
-use crate::voice::models::{Cancelled, ChecksumMismatch};
+use crate::voice::models::Cancelled;
 use anyhow::{bail, Result};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -83,11 +83,10 @@ impl Core {
             Ok(()) => Ok(self.vectors_model_info()),
             // « Annuler »: not an error to tell.
             Err(e) if e.is::<Cancelled>() => Ok(self.vectors_model_info()),
-            Err(e) if e.is::<ChecksumMismatch>() => bail!(tr!(
-                "Le fichier téléchargé n’est pas le bon modèle (somme de contrôle différente) : il n’est pas gardé. Réessaie ; derrière un proxy qui modifie les fichiers, télécharge-le ailleurs.",
-                "The file downloaded is not the right model (checksum mismatch): it was not kept. Try again; behind a proxy that alters files, download it elsewhere."
+            Err(e) => Err(crate::voice::models::download_error(
+                e,
+                crate::voice::models::Downloaded::Model,
             )),
-            Err(e) => Err(e),
         }
     }
 

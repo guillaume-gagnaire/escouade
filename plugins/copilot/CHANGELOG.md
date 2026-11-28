@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.11
+
+- The 2.2 and 2.3 lines of Escouade ship the same plugin again: protocols 3 and 4 of Copilot CLI (2.2.9) and each turn’s spend by model, its subagents’ on the model each ran on (`turnModels`, 2.2.10 and ESC-662), still written in JSON on the published protocol crate (ESC-701).
+
+## 2.2.10
+
+- A subagent's calls (its `assistant.usage`) now count for the model it ran on, not its agent's, and those of a subagent whose start it did not see (it restarted while it ran) are no longer lost: each turn tells Escouade its spend by model (`turnModels`, written in JSON on the published protocol crate), once in the agent's totals (ESC-691). Still speaks protocols 3 and 4 of Copilot CLI.
+
+## 2.2.9
+
+- Copilot CLI 1.0.116 (its SDK v2) answers with protocol 4: its agents were refused (“Copilot CLI speaks protocol 4”). Both protocols are spoken now, 3 for an older Copilot CLI and 4, whose sessions take their options in their new places (`events`, `permissions`, `interaction`, `inference`, `mcp`).
+
 ## 2.2.8
 
 - Its process no longer puts Escouade’s token in `ESCOUADE_MCP_TOKEN`: the core’s private file holds it (Escouade 2.2.0-beta.12 and later), as for its view, the variable is stripped from its commands, and its manifest no longer declares it (ESC-433). An older beta, which named the variable, loses Escouade’s server in its Copilot agents: update it.

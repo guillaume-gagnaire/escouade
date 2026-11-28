@@ -22,7 +22,7 @@ Tous les agents de tous les projets sur un seul écran, ceux qui attendent une r
 
 ### Contenu
 
-- En-tête : « Vue d'ensemble », « 3 projets · 8 agents · 2 en cours » et « ↑ ↓ choisir · Entrée ouvrir · Échap revenir ».
+- En-tête : « Vue d'ensemble », « 3 projets · 8 agents · 2 en cours », « ↑ ↓ choisir · Entrée ouvrir · Échap revenir » et « Workspace », qui montre à la place de la liste la toile des agents de tous les projets, une colonne par projet (voir *Workspace*) ; « Quitter le workspace » revient à la liste.
 - Groupes :
   - d'abord « Attend ta réponse » : les agents de tous les projets qui ont une question ou une autorisation en attente, celui qui attend depuis le plus longtemps d'abord, chaque ligne avec son projet ;
   - puis « Pull requests » (voir plus bas), quand une PR attend l'utilisateur ;

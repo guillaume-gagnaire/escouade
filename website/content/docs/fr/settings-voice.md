@@ -101,8 +101,13 @@ Ce groupe règle la voix qui lit les réponses de l’agent pendant une [convers
 | « Vitesse » | De 0,5× à 2×, par pas de 0,1 : 1 est le rythme de la voix, plus haut elle lit plus vite. En ligne, ramenée dans les bornes du service ; la ligne dit quand il n’en prend pas. | 1,0× |
 | « Volume » | De 0 à 100 %, appliqué sur ta machine, quel que soit le service. | 100 % |
 | « Délai avant l’envoi » | Le silence après lequel ce que tu as dit part à l’agent, de 0,5 à 3 s, par pas de 0,1 s. | 1,2 s |
+| « Sensibilité du micro » | De « Moins sensible » à « Plus sensible », en 11 crans : le volume, au-dessus du bruit de la pièce, à partir duquel la conversation entend ta voix (le début et la fin de tes phrases, et ta voix quand tu coupes l’agent), avec la transcription locale comme en ligne. La dictée n’en dépend pas : elle écoute jusqu’à ce que tu recliques. | « Par défaut » (le réglage d’avant la 2.2.12) |
 
 La conversation se tient dans la « Langue parlée » quand c’est le français ou l’anglais, sinon dans la langue de l’interface.
+
+### Tester le micro
+
+« Tester », à côté de « Sensibilité du micro », écoute le « Micro utilisé » et montre en direct le niveau de ta voix, le bruit de la pièce (mesuré pendant un instant de silence), la ligne du seuil et un témoin « Voix détectée », qui s’allume quand la conversation t’entendrait et s’éteint après le « Délai avant l’envoi ». Bouger le curseur déplace la ligne aussitôt : si le témoin s’allume quand tu te tais, rends le micro moins sensible ; s’il ne s’allume pas quand tu parles bas, plus sensible. « Arrêter », ou quitter la page, ferme le micro. Rien de ce qu’il entend n’est gardé ni envoyé : seul son niveau s’affiche.
 
 ### Les voix
 

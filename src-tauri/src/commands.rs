@@ -636,29 +636,8 @@ pub fn plugin_install(
     let view = core.install_plugin(&token, crate::i18n::ui())?;
     // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
     core.plugin_runtime.prepare(&view.id);
-    let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
-    let from_seed = matches!(
-        view.origin,
-        crate::plugins::Origin::Store { seed: true, .. }
-    );
-    core.track(crate::telemetry::Event::PluginInstalled { from_store });
-    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4); a version of the seed
-    // through the counts the seed keeps, once (ESC-394).
-    if from_seed {
-        core.spawn_seed_counts();
-    } else if from_store
-        && core.settings.read().telemetry == Some(true)
-        && crate::offline::allows(crate::offline::Flow::Statistics)
-    {
-        let settings = core.settings.read().clone();
-        let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
-        let update = staged.is_some_and(|(_, update)| update);
-        tauri::async_runtime::spawn(async move {
-            if let Ok(http) = crate::plugins::store::client(&settings) {
-                store.count(&http, &id, &version, update).await;
-            }
-        });
-    }
+    let update = staged.is_some_and(|(_, update)| update);
+    core.count_plugin_install(&view, update);
     Ok(view)
 }
 
@@ -1007,19 +986,31 @@ pub fn plugin_start(core: CoreState, id: String) -> Result<PluginRun, String> {
 /// What « Rechercher des mises à jour » found: the plugins as they are now, and the store as it was read (`readAt`,
 /// `error` when it did not answer: the offers of `readAt` were looked at).
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatesLooked {
     plugins: Vec<crate::plugins::PluginView>,
     store: crate::plugins::store::StoreView,
+    /// The updates by themselves that failed (ESC-700).
+    auto_failed: Vec<crate::plugins::auto::AutoFailed>,
 }
 
 /// Looks for newer versions of the installed plugins (offered, never installed), the store read again first (ESC-405).
 #[tauri::command(async)]
 pub async fn plugins_check_updates(core: CoreState<'_>) -> Result<UpdatesLooked, ()> {
     core.look_for_updates().await;
+    // Then what installs by itself (ESC-700), before the window is answered: it sees them updated.
+    core.auto_update_plugins().await;
     Ok(UpdatesLooked {
         plugins: core.plugins.list(crate::i18n::ui()),
         store: core.store.view(),
+        auto_failed: core.plugins_auto_failed(),
     })
+}
+
+/// The updates by themselves that failed since the start (ESC-700): the page Mises à jour says them.
+#[tauri::command]
+pub fn plugins_auto_failed(core: CoreState) -> Vec<crate::plugins::auto::AutoFailed> {
+    core.plugins_auto_failed()
 }
 
 /// The user agrees to the commands a plugin runs on facts, as they are now, or takes the
@@ -1265,14 +1256,25 @@ pub async fn inspect_folder(
         });
     }
     let path = path.trim().to_string();
-    let history = core
-        .closed_project_info_for(&path, history_id.as_deref())
-        .await;
-    let repos = crate::repos::detect(p, &crate::paths::worktrees_root(&path, "")).await;
+    // At once, not one after the other (ESC-687): on a loaded machine each git takes seconds to
+    // start, and the window waits for all of them before it says what the folder is.
+    let worktrees = crate::paths::worktrees_root(&path, "");
+    let (history, repos, root, st) = tokio::join!(
+        core.closed_project_info_for(&path, history_id.as_deref()),
+        crate::repos::detect(p, &worktrees),
+        crate::git::repo_root(&path),
+        crate::git::status(&path),
+    );
     if !repos.is_empty() {
+        // A repository git failed to read is said, never counted as one without a commit.
+        let commits = futures_util::future::join_all(repos.iter().map(|r| {
+            let dir = crate::repos::join(&path, r);
+            async move { crate::git::has_commit(&dir).await }
+        }))
+        .await;
         let mut repos_without_commit = Vec::new();
-        for r in &repos {
-            if !crate::git::has_commit(&crate::repos::join(&path, r)).await {
+        for (r, has) in repos.iter().zip(commits) {
+            if !has.map_err(err)? {
                 repos_without_commit.push(r.clone());
             }
         }
@@ -1287,9 +1289,10 @@ pub async fn inspect_folder(
             repos_without_commit,
         });
     }
-    Ok(match crate::git::toplevel(&path).await {
+    // Git failed to read it: said, not shown as a folder without git, nor as a clean repository.
+    Ok(match root.map_err(err)? {
         Some(_) => {
-            let st = crate::git::status(&path).await.unwrap_or_default();
+            let st = st.map_err(err)?;
             FolderInfo {
                 exists: true,
                 is_repo: true,
@@ -1352,16 +1355,25 @@ pub async fn inspect_setup(
     )
     .await;
     if !repos.is_empty() {
+        // One that git failed to read, and none with a commit: the error, not « no commit ».
+        let mut unread = None;
         for r in &repos {
             let dir = crate::repos::join(&path, r);
-            if crate::git::has_commit(&dir).await {
-                return Ok(SetupInfo {
-                    has_commit: true,
-                    branches: crate::git::branches(&dir).await.unwrap_or_default(),
-                    missing_dirs,
-                    worktrees_tracked: false,
-                });
+            match crate::git::has_commit(&dir).await {
+                Ok(true) => {
+                    return Ok(SetupInfo {
+                        has_commit: true,
+                        branches: crate::git::branches(&dir).await.map_err(err)?,
+                        missing_dirs,
+                        worktrees_tracked: false,
+                    });
+                }
+                Ok(false) => {}
+                Err(e) => unread = unread.or(Some(e)),
             }
+        }
+        if let Some(e) = unread {
+            return Err(err(e));
         }
         return Ok(SetupInfo {
             has_commit: false,
@@ -1370,21 +1382,34 @@ pub async fn inspect_setup(
             worktrees_tracked: false,
         });
     }
-    let repo = crate::git::toplevel(&path).await.is_some();
+    // Git failed to read it: the error, never « no commit » (ESC-687), which would offer to make
+    // one in a repository that has some. The questions at once: each git is slow to start on a
+    // loaded machine.
+    if crate::git::repo_root(&path).await.map_err(err)?.is_none() {
+        return Ok(SetupInfo {
+            has_commit: false,
+            branches: Vec::new(),
+            missing_dirs,
+            worktrees_tracked: false,
+        });
+    }
+    let root = crate::paths::worktrees_root(&path, &worktree_dir);
+    let (has_commit, branches, worktrees_tracked) = tokio::join!(
+        crate::git::has_commit(&path),
+        crate::git::branches(&path),
+        crate::git::worktrees_in_tracked_folder(&path, &root),
+    );
+    let has_commit = has_commit.map_err(err)?;
     Ok(SetupInfo {
-        has_commit: repo && crate::git::has_commit(&path).await,
-        branches: if repo {
-            crate::git::branches(&path).await.unwrap_or_default()
+        has_commit,
+        // A new repository has no branch to list yet.
+        branches: if has_commit {
+            branches.map_err(err)?
         } else {
-            Vec::new()
+            branches.unwrap_or_default()
         },
         missing_dirs,
-        worktrees_tracked: repo
-            && crate::git::worktrees_in_tracked_folder(
-                &path,
-                &crate::paths::worktrees_root(&path, &worktree_dir),
-            )
-            .await,
+        worktrees_tracked,
     })
 }
 
@@ -4721,6 +4746,33 @@ pub fn voice_cancel(voice: VoiceState) {
     voice.cancel();
 }
 
+/// « Tester » of Réglages › Voix (ESC-665): listens to `device` (empty: the system's) as the conversation's detector
+/// hears it at `sensitivity`, its levels in `UiEvent::Voice` (`meter`); nothing of the sound kept nor sent. Off the
+/// main thread: macOS may ask for the microphone first.
+#[tauri::command(async)]
+pub fn voice_meter_start(
+    voice: VoiceState,
+    device: String,
+    sensitivity: i32,
+    silence_ms: u32,
+) -> Res<u64> {
+    voice
+        .meter_start(&device, sensitivity, silence_ms)
+        .map_err(voice_err)
+}
+
+/// The slider of « Sensibilité du micro » moved while the tester listens: its line moves at once.
+#[tauri::command]
+pub fn voice_meter_set(voice: VoiceState, session: u64, sensitivity: i32) {
+    voice.meter_set(session, sensitivity);
+}
+
+/// « Arrêter », or the page left.
+#[tauri::command]
+pub fn voice_meter_stop(voice: VoiceState, session: u64) {
+    voice.meter_stop(session);
+}
+
 /// Downloads a model (its progress in `UiEvent::Voice`), through the proxy of the settings.
 #[tauri::command]
 pub async fn voice_download(core: CoreState<'_>, voice: VoiceState<'_>, model: String) -> Res<()> {
@@ -4796,6 +4848,7 @@ fn conv_choice(
         speak: speak_options(settings, &id),
         volume: settings.voice.speech.volume.clamp(0.0, 1.0),
         silence_ms: settings.voice.speech.silence_ms,
+        sensitivity: settings.voice.speech.sensitivity,
         voice: id,
         online: online.online,
         online_error: online.error,
@@ -6381,13 +6434,7 @@ pub async fn team_project_logo(
 /// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
 #[cfg(feature = "desktop")]
 fn own_of(app: &tauri::AppHandle) -> crate::devpage::Own {
-    use ::tauri::Manager;
-    let dev = app
-        .try_state::<crate::navigation::Home>()
-        .and_then(|h| h.dev.clone());
-    Arc::new(move |u: &tauri::Url| {
-        crate::navigation::destination(u, dev.as_ref()) == crate::navigation::Destination::App
-    })
+    crate::devpage::own_of(app)
 }
 
 /// What happens to the pages, to the window.
@@ -6446,6 +6493,7 @@ pub fn devpage_open(
             bounds,
             data_root: core.data.root(),
             visible: bounds.is_some(),
+            local: crate::mcp::browsers::local_of(core.inner(), &project_id),
         },
         own,
         tell_of(&core),
@@ -6453,7 +6501,8 @@ pub fn devpage_open(
     pages.get(&agent_id).ok_or_else(|| "no page".into())
 }
 
-/// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none).
+/// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none); `placement`:
+/// alone, beside or under something else (`list_browsers`, ESC-669).
 #[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_place(
@@ -6461,8 +6510,101 @@ pub fn devpage_place(
     pages: State<Arc<crate::devpage::Pages>>,
     agent_id: String,
     bounds: Option<crate::devpage::Bounds>,
+    placement: Option<crate::devpage::Placement>,
 ) -> Res<()> {
-    crate::devpage::place(&app, &pages, &agent_id, bounds)
+    crate::devpage::place(&app, &pages, &agent_id, bounds, placement)
+}
+
+/// The leaves of the browser `agent_id` and the requests waiting for the user (its band, ESC-669).
+#[tauri::command]
+pub fn devpage_consents(
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> crate::devpage::Consents {
+    pages.consents(&agent_id)
+}
+
+/// The user's answer in the band of the browser `agent_id` to `agent`'s request to read `origin`
+/// (« Permettre » or « Refuser », ESC-669): told to the agent by a message. The band's state after.
+#[tauri::command]
+pub async fn devpage_consent(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    agent: String,
+    origin: String,
+    allow: bool,
+) -> Res<crate::devpage::Consents> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers::answer(&core, &pages, &agent_id, &agent, &origin, allow).await;
+    Ok(pages.consents(&agent_id))
+}
+
+/// « Retirer les accords » of the browser `agent_id` (ESC-669): its leaves gone; an agent whose
+/// request waited is told it was not given.
+#[tauri::command]
+pub async fn devpage_revoke(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> Res<crate::devpage::Consents> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers::revoke(&core, &pages, &agent_id).await;
+    Ok(pages.consents(&agent_id))
+}
+
+/// The agents whose conversation the window shows now (ESC-678): what `open_browser` opens beside
+/// while the user looks at it.
+#[tauri::command]
+pub fn devpage_looking(pages: State<Arc<crate::devpage::Pages>>, agents: Vec<String>) {
+    pages.set_looking(agents.into_iter().take(16));
+}
+
+/// The user closed the pane of a browser or a page the agent \`agent\` drives, or its row (AB-9): nothing of the
+/// agent's opens on screen until the user leaves its conversation and comes back.
+#[tauri::command]
+pub fn devpage_dismiss(pages: State<Arc<crate::devpage::Pages>>, agent: String) {
+    pages.dismiss(&agent);
+}
+
+/// « Laisser piloter par… » (AB-9): the user lets \`agent\` drive the browser \`key\` they opened alone, or nobody.
+#[tauri::command]
+pub async fn devpage_lend(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    agent: Option<String>,
+) -> Res<()> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers_drive::lend(&core, &pages, &key, agent.as_deref()).await
+}
+
+/// The agents' requests to open an address outside their project's launch (ESC-678, C3), for the
+/// bands of their conversations.
+#[tauri::command]
+pub fn devpage_open_asks(
+    core: CoreState,
+    pages: State<Arc<crate::devpage::Pages>>,
+) -> Vec<crate::devpage::OpenAsk> {
+    crate::mcp::browsers_open::open_asks(&core, &pages)
+}
+
+/// The user's answer to the request `id` to open an address (« Permettre une fois » or
+/// « Refuser », ESC-678): opened, the agent told by a message. The requests after.
+#[tauri::command]
+pub async fn devpage_open_answer(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    id: String,
+    allow: bool,
+) -> Res<Vec<crate::devpage::OpenAsk>> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers_open::answer(&core, &pages, &id, allow).await?;
+    Ok(crate::mcp::browsers_open::open_asks(&core, &pages))
 }
 
 /// Back, forward, reload, or `to` (an address typed in its bar).
@@ -6719,6 +6861,344 @@ pub async fn overseer_undo(core: CoreState<'_>, id: String) -> Res<()> {
 #[tauri::command]
 pub fn overseer_revoke(core: CoreState, id: String) -> Res<()> {
     core.overseer_revoke(&id).map(|_| ()).map_err(err)
+}
+
+// ---------- the agents' pages (ESC-667, AP-1): the shelter; the MCP tools are `mcp::pages` (AP-2) ----------
+
+/// What happens to the agents' pages, to the window.
+fn agentpage_tell(core: &Arc<Core>) -> crate::agentpage::Tell {
+    let hub = Arc::downgrade(core);
+    Arc::new(move |page| {
+        if let Some(core) = hub.upgrade() {
+            core.hub.emit(UiEvent::AgentPage { page });
+        }
+    })
+}
+
+/// A debug build alone (the end-to-end test): opens the trap of docs/AGENT-PAGES.md § 8.4 as page
+/// `p-1` in its shelter, at `bounds`, its listeners on `tcp` and `udp` of the loopback; and `p-13`,
+/// a neighbour it tries to read. A release refuses it: no page opens before the MCP tool (AP-2).
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub fn agentpage_open_trap(
+    app: tauri::AppHandle,
+    core: CoreState,
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    tcp: u16,
+    udp: u16,
+    bounds: Option<crate::agentpage::Bounds>,
+) -> Res<crate::agentpage::PageView> {
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let root = core.data.root().join("agent-pages-trap");
+    let (trap, neighbour) = (root.join("p-1"), root.join("p-13"));
+    crate::agentpage::write_trap(&trap, tcp, udp).map_err(|e| err(e.into()))?;
+    crate::agentpage::write_neighbour(&neighbour).map_err(|e| err(e.into()))?;
+    shelter.put("p-1", trap)?;
+    shelter.put("p-13", neighbour)?;
+    crate::agentpage::open(
+        &app,
+        &shelter,
+        crate::agentpage::Open {
+            page: "p-1",
+            bounds,
+            visible: bounds.is_some(),
+            data_root: core.data.root(),
+        },
+        own_of(&app),
+        agentpage_tell(&core),
+    )?;
+    shelter.view("p-1").ok_or_else(|| "no page".into())
+}
+
+/// Agent's page `page`, as the shelter keeps it; none when it is not open.
+#[tauri::command]
+pub fn agentpage_view(
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    page: String,
+) -> Res<Option<crate::agentpage::PageView>> {
+    Ok(shelter.view(&page))
+}
+
+/// Agent's page `page` in the window: placed at `bounds`, or hidden (none). `placement` says where
+/// it is shown (`full` by default), for `list_browsers` and `get_page` (ESC-673).
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub fn agentpage_place(
+    app: tauri::AppHandle,
+    core: CoreState,
+    page: String,
+    bounds: Option<crate::agentpage::Bounds>,
+    placement: Option<crate::devpage::Placement>,
+) -> Res<()> {
+    use crate::devpage::Placement;
+    let shown = match (bounds, placement) {
+        (Some(b), p) if b.width >= 1.0 && b.height >= 1.0 => match p {
+            Some(Placement::Hidden) | None => Placement::Full,
+            Some(p) => p,
+        },
+        _ => Placement::Hidden,
+    };
+    core.page_placed(&page, shown);
+    crate::agentpage::place(&app, &page, bounds)
+}
+
+/// The agents' pages whose row is open, in every project (the window's rows of « Navigateurs », AP-3).
+#[tauri::command]
+pub fn agentpage_rows(core: CoreState) -> Vec<crate::pages::PageRow> {
+    core.page_open_rows()
+}
+
+/// Agent's page `page` as its card and its view draw it; none once it is no longer kept.
+#[tauri::command]
+pub fn agentpage_info(core: CoreState, page: String) -> Option<crate::pages::PageRow> {
+    core.page_row(&page)
+}
+
+/// The user opens agent's page `page` again (its card): its row, on its last version.
+#[tauri::command]
+pub fn agentpage_reopen(core: CoreState, page: String) -> Res<crate::pages::PageRow> {
+    core.inner().page_reopen(&page)
+}
+
+/// The row of agent's page `page` shows its version `n` (« v2 ▾ » of its bar).
+#[tauri::command]
+pub fn agentpage_version(core: CoreState, page: String, n: u32) -> Res<crate::pages::PageRow> {
+    core.inner().page_show_version(&page, n)
+}
+
+/// The user closes the row of agent's page `page` (its ×): the page stays kept.
+#[tauri::command]
+pub fn agentpage_close_row(core: CoreState, page: String) -> bool {
+    core.page_close_row(&page)
+}
+
+/// « Annuler » of the band of the choice (AP-4): what agent's page `page` proposed is let go.
+#[tauri::command]
+pub fn agentpage_drop_proposal(core: CoreState, page: String) -> bool {
+    core.page_drop_proposal(&page)
+}
+
+/// A debug build alone (the end-to-end test): a click on the first element `selector` matches in
+/// agent's page `page`, as the user's in the page (the page's own scripts answer it).
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub fn agentpage_click(app: tauri::AppHandle, page: String, selector: String) -> Res<()> {
+    use tauri::Manager;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let webview = app
+        .get_webview(&crate::agentpage::label(&page))
+        .ok_or("no such page")?;
+    let sel = serde_json::to_string(&selector).map_err(|e| e.to_string())?;
+    webview
+        .eval(format!(
+            "(function(){{var e=document.querySelector({sel});if(e)e.click()}})()"
+        ))
+        .map_err(|e| e.to_string())
+}
+
+/// The user's gesture on « La page veut ouvrir… »: `follow` opens the web address the core kept
+/// for page `page` in the system's browser (never one the window gives), else it is let go.
+#[tauri::command]
+pub fn agentpage_outside(
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    page: String,
+    follow: bool,
+) -> Res<Option<String>> {
+    let wanted = crate::agentpage::take_wanted(&shelter, &page);
+    if let (true, Some(url)) = (follow, wanted.as_ref()) {
+        crate::outside::open_url(url).map_err(err)?;
+    }
+    Ok(wanted)
+}
+
+/// Closes agent's page `page`.
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub fn agentpage_close(
+    app: tauri::AppHandle,
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    page: String,
+) -> Res<()> {
+    crate::agentpage::close(&app, &shelter, &page);
+    Ok(())
+}
+
+/// A request a template draws, as the end-to-end test gives it (AP-4 takes it from the box).
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TemplateChoice {
+    key: String,
+    title: String,
+    options: Vec<TemplateChoiceOption>,
+    recommend: Option<String>,
+    multi: bool,
+    answered: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct TemplateChoiceOption {
+    id: String,
+    label: String,
+    description: Option<String>,
+}
+
+/// A debug build alone (the end-to-end test of the templates, ESC-674): renders `template` with
+/// `data` (checked by the core: refused with its problems) as page `page` in the shelter, in `lang`
+/// and `theme`, with `images` (a name and its bytes in base64) beside it, and opens it at `bounds`.
+/// Its anchors come back. A release refuses it: the MCP tool shows pages (AP-2).
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub async fn agentpage_open_template(
+    app: tauri::AppHandle,
+    core: CoreState<'_>,
+    shelter: State<'_, Arc<crate::agentpage::Shelter>>,
+    page: String,
+    template: String,
+    title: String,
+    data: serde_json::Value,
+    lang: String,
+    theme: String,
+    choice: Option<TemplateChoice>,
+    images: Option<Vec<(String, String)>>,
+    bounds: Option<crate::agentpage::Bounds>,
+) -> Res<Vec<crate::agentpage_templates::Anchor>> {
+    use crate::agentpage_templates as t;
+    use base64::Engine;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    if !crate::agentpage::is_page(&page) {
+        return Err(format!("not a page: {page}"));
+    }
+    let template = t::Template::parse(&template).ok_or("not a template")?;
+    let look = t::Look {
+        lang: crate::i18n::Lang::named(&lang).unwrap_or(crate::i18n::Lang::Fr),
+        theme: if theme == "light" {
+            t::Theme::Light
+        } else {
+            t::Theme::Dark
+        },
+        tint: None,
+        choice: choice.map(|c| t::Choice {
+            key: c.key,
+            title: c.title,
+            options: c
+                .options
+                .into_iter()
+                .map(|o| t::ChoiceOption {
+                    id: o.id,
+                    label: o.label,
+                    description: o.description,
+                })
+                .collect(),
+            recommend: c.recommend,
+            multi: c.multi,
+            answered: c.answered,
+        }),
+    };
+    let rendered = t::render(template, &title, &data, &look).map_err(|p| t::tell(&p))?;
+    let dir = core.data.root().join("agent-pages-templates").join(&page);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| err(e.into()))?;
+    std::fs::write(dir.join("index.html"), &rendered.html).map_err(|e| err(e.into()))?;
+    for (name, b64) in images.unwrap_or_default() {
+        if !rendered.images.contains(&name) {
+            continue;
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| e.to_string())?;
+        let at = dir.join(&name);
+        if let Some(parent) = at.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| err(e.into()))?;
+        }
+        std::fs::write(at, bytes).map_err(|e| err(e.into()))?;
+    }
+    if shelter.view(&page).is_some() {
+        crate::agentpage::close(&app, &shelter, &page);
+    }
+    shelter.put(&page, dir)?;
+    crate::agentpage::open(
+        &app,
+        &shelter,
+        crate::agentpage::Open {
+            page: &page,
+            bounds,
+            visible: bounds.is_some(),
+            data_root: core.data.root(),
+        },
+        own_of(&app),
+        agentpage_tell(&core),
+    )?;
+    Ok(rendered.anchors)
+}
+
+/// A debug build alone: the HTML or the text of `selector` in agent's page `page`, read in
+/// Escouade's world (the read bridge, ESC-668), as the end-to-end test checks what a template drew.
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub async fn agentpage_read(
+    app: tauri::AppHandle,
+    page: String,
+    selector: Option<String>,
+    text: bool,
+) -> Res<String> {
+    use tauri::Manager;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let webview = app
+        .get_webview(&crate::agentpage::label(&page))
+        .ok_or("no such page")?;
+    let what = if text {
+        crate::browserread::What::Text
+    } else {
+        crate::browserread::What::Html
+    };
+    tokio::task::spawn_blocking(move || {
+        crate::browserread::read(&webview, selector.as_deref(), what, Some(200_000))
+            .map(|r| r.content)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// A debug build alone: a capture of agent's page `page` (its view), written to `path` (PNG or
+/// JPEG, as the system gives it); its extension comes back.
+#[tauri::command]
+#[cfg(feature = "desktop")]
+pub async fn agentpage_capture(app: tauri::AppHandle, page: String, path: String) -> Res<String> {
+    use tauri::Manager;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let webview = app
+        .get_webview(&crate::agentpage::label(&page))
+        .ok_or("no such page")?;
+    tokio::task::spawn_blocking(move || {
+        let shot = crate::browserread::capture(
+            &webview,
+            crate::browserread::Ask {
+                selector: None,
+                full_page: false,
+                width: None,
+            },
+        )?;
+        let ext = match shot.format {
+            crate::browserread::Format::Png => "png",
+            crate::browserread::Format::Jpeg => "jpg",
+        };
+        std::fs::write(format!("{path}.{ext}"), &shot.bytes).map_err(|e| e.to_string())?;
+        Ok::<_, String>(ext.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ---------- the box « À toi » (ESC-509): the commands its screen (IN-2) reads and acts by ----------
@@ -7637,4 +8117,65 @@ pub fn local_voice_set(
         v.conversation_tune(&conv_choice(&core.settings.read(), &*core.secrets, &v.catalog).0);
     }
     Ok(())
+}
+
+/// The driving of the row `key` (`drive_browser`, ESC-679): who drives it, who has the hand, the last gesture,
+/// whether « Continuer » waits, the requests to fill a password. For the band of AB-8.
+#[tauri::command]
+pub fn browser_drive_state(
+    pages: State<Arc<crate::devpage::Pages>>,
+    key: String,
+) -> crate::browserdrive::DriveView {
+    pages.drives.view(&key)
+}
+
+/// A move of the user's on the row `key`: « Reprendre la main » (`take`), « La rendre » (`give`), « Ne plus laisser
+/// piloter » (`stop`), « Continuer » (`continue`). The agent is told when the hand comes back or the driving ends.
+#[tauri::command]
+pub async fn browser_drive_hand(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    hand: crate::browserdrive::HandMove,
+) -> Res<crate::browserdrive::DriveView> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    Ok(crate::mcp::browsers_drive::hand(&core, &pages, &key, hand).await)
+}
+
+/// The user's answer to `agent`'s request to fill a password in the row `key` (choice C2, once per browser).
+#[tauri::command]
+pub async fn browser_drive_password(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    agent: String,
+    allow: bool,
+) -> Res<crate::browserdrive::DriveView> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    Ok(crate::mcp::browsers_drive::password(&core, &pages, &key, &agent, allow).await)
+}
+
+/// Where the page of the row `key` is: its scroll, height and view (ESC-680), for the rail of an agent's page.
+#[tauri::command]
+pub async fn browser_drive_place(
+    core: CoreState<'_>,
+    key: String,
+) -> Res<Option<serde_json::Value>> {
+    let core = core.inner().clone();
+    Ok(crate::mcp::browsers_drive::place(&core, &key).await)
+}
+
+/// A pin of the rail of an agent's page clicked (ESC-680): the page goes back where its agent had put it.
+#[tauri::command]
+pub async fn browser_drive_revisit(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    n: u32,
+) -> Res<()> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers_drive::revisit(&core, &pages, &key, n).await
 }

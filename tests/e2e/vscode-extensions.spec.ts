@@ -73,7 +73,8 @@ test('the extensions of Open VSX: searched, checked and installed by the core, a
   });
 
   await addProject(page, app.repo);
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   const view = page.getByTestId('vscode-view');
   const wb = workbench(page);
   await openInExplorer(page, 'src/x.acme');

@@ -1,6 +1,7 @@
 //! Types persisted on disk and exchanged with the frontend.
 
 use crate::notify::NotifyKind;
+use escouade_plan::canvas::Canvas;
 use escouade_plan::plan::PlanState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -129,6 +130,17 @@ pub struct Settings {
     /// Nobody by default, for a new installation as for settings saved before it: Claude outside
     /// Escouade (`Caller::External`) always answers.
     pub agents_answer: AgentsAnswer,
+    /// « Agents et navigateurs » (ESC-669, docs/AGENT-BROWSERS.md § 9), under « Les agents peuvent
+    /// piloter Escouade »: the tools of the browsers (`list_browsers`, `read_browser`…) answer the
+    /// agents, and the server's instructions name them. On by default, for settings saved before it
+    /// too. In 2.3 it becomes the switch of Réglages › Fonctionnalités, under the same key.
+    pub agent_browsers: bool,
+    /// « Pages des agents » (ESC-673, docs/AGENT-PAGES.md § 9), under « Les agents peuvent piloter
+    /// Escouade »: `show_page`, `get_page` and `close_page` are offered to the agents, and the server's
+    /// instructions name them. Off, the tools leave the list, the pages' rows close, nothing is erased.
+    /// On by default, for settings saved before it too. In 2.3 it becomes the switch of Réglages ›
+    /// Fonctionnalités, under the same key.
+    pub agent_pages: bool,
     /// « Garder les fichiers des demandes closes » (ESC-510): 7, 30 or 90 days after a request of
     /// the box closed, its files are erased (`asks_sweep`). 30 by default.
     pub inbox_keep_days: u32,
@@ -221,6 +233,10 @@ pub struct Settings {
     /// (`Core::settle_verified_only`); one that has one keeps its choice. A new installation has it settled already.
     #[serde(default)]
     pub plugins_verified_settled: bool,
+    /// « Mettre à jour tout seuls » (la vue Plugins, beside « N'installer que des versions vérifiées », ESC-700): off by
+    /// default, for a new installation as for one before it.
+    #[serde(default)]
+    pub plugins_auto_update: PluginsAutoUpdate,
     /// « Harness des plugins tiers » (Réglages › Plugins, SEC-01, ESC-589): a harness a plugin of a third party
     /// describes runs a program of this machine out of the sandbox; it asks the user at its first launch, its whole
     /// command said (`Ask`), or none of them runs (`Refuse`, what the policy of a managed device will impose).
@@ -336,6 +352,20 @@ impl Default for OverseerSettings {
             shortcut: default_overseer_shortcut(),
         }
     }
+}
+
+/// « Mettre à jour tout seuls » (`Settings::plugins_auto_update`, ESC-700): which plugins install their updates without a
+/// gesture, those only that ask for nothing more and whose version is verified (`escouade_plugins::auto`). Off by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginsAutoUpdate {
+    /// « Jamais »: every update offered, installed by a gesture.
+    #[default]
+    Never,
+    /// « Les plugins d'Escouade »: `dev.escouade.*` alone, signed at the store.
+    Escouade,
+    /// « Tous les plugins vérifiés ».
+    Verified,
 }
 
 /// « Harness des plugins tiers » (`Settings::third_party_harnesses`, ESC-589).
@@ -564,6 +594,10 @@ pub struct SpeechSettings {
     pub volume: f32,
     /// The silence that ends what the user says, and sends it, in milliseconds.
     pub silence_ms: u32,
+    /// « Sensibilité du micro » (ESC-665): how loud over the room's noise the user must be heard, from -5 (less
+    /// sensitive) to 5 (more); 0, the detector as it always was. The conversation's (a sentence's start and end, the
+    /// user speaking over the agent), whatever transcribes it; kept on the machine.
+    pub sensitivity: i32,
     /// Who makes the voice (ESC-132): "local" (Piper, on the machine) or "online" (the service `online_service`, with
     /// the key of its dictation).
     pub engine: String,
@@ -583,6 +617,7 @@ impl Default for SpeechSettings {
             rate: 1.0,
             volume: 1.0,
             silence_ms: 1200,
+            sensitivity: 0,
             engine: "local".into(),
             online_service: "openai".into(),
             online_models: Default::default(),
@@ -1102,6 +1137,8 @@ impl Default for Settings {
             writer_model: String::new(),
             mcp_enabled: false,
             agents_answer: AgentsAnswer::Nobody,
+            agent_browsers: true,
+            agent_pages: true,
             inbox_keep_days: 30,
             mcp_port: 0,
             accounts: Vec::new(),
@@ -1127,6 +1164,7 @@ impl Default for Settings {
             plugin_theme: String::new(),
             plugins_verified_only: true,
             plugins_verified_settled: true,
+            plugins_auto_update: PluginsAutoUpdate::Never,
             third_party_harnesses: ThirdPartyHarnesses::Ask,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
@@ -1323,6 +1361,15 @@ pub struct Project {
     /// (`crate::parts::state`). Of this device: never in `.escouade.yml`.
     #[serde(default, skip_serializing_if = "crate::parts::PartChoices::is_empty")]
     pub parts: crate::parts::PartChoices,
+    /// « Page à soi » (AP-7, ESC-677): the `.html` this machine chose for `show_page(template:
+    /// "custom")`, absolute or relative to the project's folder; empty: none. Of this machine, never
+    /// in `.escouade.yml`, and ahead of what the file proposes (`file_custom_page`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub custom_page: String,
+    /// `pages.custom` of its `.escouade.yml` (AP-7): a page relative to the repository, set only once
+    /// the user trusted the file (it counts with its commands), never by the window.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub file_custom_page: String,
     /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<AgentFolder>,
@@ -2851,6 +2898,10 @@ pub struct AgentMeta {
     /// its stream (`plan`). None until it has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan: Option<PlanState>,
+    /// What the « Workspace » shows of it without its conversation: the skills and plugins it and
+    /// its subagents used (`canvas`). None until it has any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canvas: Option<Canvas>,
     /// The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the
     /// new one: a turn that fails there is the resume's failure, and this is where it goes back to.
     pub moved_from: Option<String>,
@@ -3259,6 +3310,11 @@ pub struct PersistedState {
     /// What the squad lead said of a view of the box (ESC-557): « Le chef s'en occupe », or
     /// « Réglé par … », by the view's key. It falls once its source changes.
     pub inbox_marks: BTreeMap<String, crate::asks::ViewMark>,
+    /// The agents' pages (ESC-673, docs/AGENT-PAGES.md § 3): who showed them, their versions. Their files are in
+    /// `<données>/pages/`.
+    pub pages: Vec<crate::agentpages::AgentPage>,
+    /// The number of the last page shown (`p-<n>`): never given twice.
+    pub page_seq: u64,
 }
 
 /// A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order.
@@ -4178,6 +4234,28 @@ mod tests {
     }
 
     #[test]
+    fn plugins_update_by_themselves_never_by_default() {
+        assert_eq!(
+            Settings::default().plugins_auto_update,
+            PluginsAutoUpdate::Never
+        );
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(s.plugins_auto_update, PluginsAutoUpdate::Never);
+        for (word, choice) in [
+            ("never", PluginsAutoUpdate::Never),
+            ("escouade", PluginsAutoUpdate::Escouade),
+            ("verified", PluginsAutoUpdate::Verified),
+        ] {
+            let s: Settings = serde_json::from_value(json!({ "pluginsAutoUpdate": word })).unwrap();
+            assert_eq!(s.plugins_auto_update, choice);
+            assert_eq!(
+                serde_json::to_value(&s).unwrap()["pluginsAutoUpdate"],
+                json!(word)
+            );
+        }
+    }
+
+    #[test]
     fn third_party_harnesses_ask_unless_refused() {
         assert_eq!(
             Settings::default().third_party_harnesses,
@@ -4665,6 +4743,27 @@ mod tests {
         s.todo_tools = false;
         assert_eq!(s.agent_env(), s.claude_env());
         assert!(s.agent_env().iter().all(|(k, _)| k != TODO_TOOLS_VAR));
+    }
+
+    #[test]
+    fn settings_saved_before_the_pages_switch_have_it_on() {
+        let s: Settings = serde_json::from_str(r#"{"sound":false}"#).unwrap();
+        assert!(s.agent_pages);
+        assert_eq!(serde_json::to_value(&s).unwrap()["agentPages"], json!(true));
+        let off: Settings = serde_json::from_str(r#"{"agentPages":false}"#).unwrap();
+        assert!(!off.agent_pages);
+    }
+
+    #[test]
+    fn settings_saved_before_the_browsers_switch_have_it_on() {
+        let s: Settings = serde_json::from_str(r#"{"sound":false}"#).unwrap();
+        assert!(s.agent_browsers);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["agentBrowsers"],
+            json!(true)
+        );
+        let off: Settings = serde_json::from_str(r#"{"agentBrowsers":false}"#).unwrap();
+        assert!(!off.agent_browsers);
     }
 
     #[test]

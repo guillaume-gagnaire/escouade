@@ -80,6 +80,7 @@ enum Names {
 fn naming_calls() -> Vec<(&'static str, Names, Value)> {
     vec![
         ("list_agents", Names::Project, json!({ "project": "{}" })),
+        ("list_browsers", Names::Project, json!({ "project": "{}" })),
         ("list_folders", Names::Project, json!({ "project": "{}" })),
         (
             "create_folder",
@@ -419,6 +420,21 @@ async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects
         "revoke_directive",
         "undo_action",
         "leave_to_user",
+        // A browser of the caller's own project alone, by its key (browsers_tests).
+        "read_browser",
+        // The caller's own project alone: what it opens, and a browser of it by its key
+        // (browsers_open_tests).
+        "open_browser",
+        "close_browser",
+        // The caller's own pages alone, in its own project (pages_tests).
+        "show_page",
+        "get_page",
+        "close_page",
+        "capture_browser",
+        "browser_console",
+        // The caller's own rows alone, by their key: a private project's are known to its own agents alone
+        // (browsers_drive_tests).
+        "drive_browser",
     ];
     let named: Vec<&str> = naming_calls().iter().map(|(t, _, _)| *t).collect();
     for tool in EXPOSED {

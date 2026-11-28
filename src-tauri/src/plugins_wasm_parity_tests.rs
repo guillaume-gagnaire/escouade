@@ -1353,6 +1353,15 @@ fn opencode_transcript(plugin: &mut dyn Plugin, fake: &mut FakeOpencode) -> Valu
 
 /// `played` and `was` side by side, a step at a time: the first that differs says so.
 fn same_steps(played: &Value, was: &Value) {
+    // Its usage by model (`turnModels`, ESC-691), which the native plugin did not have: their sum is the turn's (ESC-693).
+    let mut played = played.clone();
+    for step in played.as_array_mut().unwrap() {
+        let text = step.to_string();
+        if let Some(items) = step.get_mut("items").and_then(Value::as_array_mut) {
+            crate::plugins_harness_parity_tests::items_without_turn_models(items, &text);
+        }
+    }
+    let played = &played;
     for (a, b) in played
         .as_array()
         .unwrap()

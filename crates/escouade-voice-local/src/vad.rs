@@ -16,10 +16,48 @@ pub fn rms(frame: &[f32]) -> f32 {
     (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt()
 }
 
-/// Under this, a frame is silence whatever the room's noise (about -46 dBFS).
+/// Under this, a frame is silence whatever the room's noise (about -46 dBFS), at the default sensitivity.
 const FLOOR: f32 = 0.005;
-/// A frame is speech when it is this many times the room's noise (about +10 dB).
+/// A frame is speech when it is this many times the room's noise (about +10 dB), at the default sensitivity.
 const OVER_NOISE: f32 = 3.2;
+/// « Sensibilité du micro » (ESC-665): from `-SENSITIVITY_MAX` (less sensitive) to `SENSITIVITY_MAX` (more), 0 being
+/// the detector as it always was. Each step moves the threshold over the room's noise, and the floor with it, by
+/// `STEP_DB`: in a quiet room the floor is what decides, in a noisy one the noise.
+pub const SENSITIVITY_MAX: i32 = 5;
+const STEP_DB: f32 = 1.5;
+/// Never closer to the room's noise than this (about +6 dB): its own ups and downs, from one frame to the next, are
+/// not speech. The more sensitive steps then lower the floor only.
+const MIN_OVER_NOISE: f32 = 2.0;
+
+/// What a sensitivity makes of the detector: how many times the room's noise a frame must be (`over_noise`), and the
+/// level under which it is silence whatever the noise (`floor`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Levels {
+    pub over_noise: f32,
+    pub floor: f32,
+}
+
+impl Levels {
+    pub fn of(sensitivity: i32) -> Self {
+        let s = sensitivity.clamp(-SENSITIVITY_MAX, SENSITIVITY_MAX);
+        if s == 0 {
+            return Self {
+                over_noise: OVER_NOISE,
+                floor: FLOOR,
+            };
+        }
+        let factor = 10f32.powf(-(s as f32) * STEP_DB / 20.0);
+        Self {
+            over_noise: (OVER_NOISE * factor).max(MIN_OVER_NOISE),
+            floor: FLOOR * factor,
+        }
+    }
+
+    /// The level over which a frame is speech, in a room of `noise`.
+    pub fn threshold(&self, noise: f32) -> f32 {
+        (noise * self.over_noise).max(self.floor)
+    }
+}
 /// The speech that starts a sentence: this long, in the last `START_WINDOW` frames.
 const START_FRAMES: usize = 8;
 const START_WINDOW: usize = 12;
@@ -41,6 +79,8 @@ pub enum Heard {
 pub struct Endpointer {
     /// The silence that ends a sentence, in milliseconds (« Délai avant l’envoi »).
     pub silence_ms: u32,
+    sensitivity: i32,
+    levels: Levels,
     noise: f32,
     /// The levels of the last frames outside a sentence: the room's noise is the quietest of them.
     room: std::collections::VecDeque<f32>,
@@ -54,6 +94,8 @@ impl Endpointer {
     pub fn new(silence_ms: u32) -> Self {
         Self {
             silence_ms,
+            sensitivity: 0,
+            levels: Levels::of(0),
             noise: 0.003,
             room: Default::default(),
             recent: Default::default(),
@@ -63,9 +105,30 @@ impl Endpointer {
         }
     }
 
+    /// « Sensibilité du micro »: the threshold it hears speech over (nothing else changes).
+    pub fn with_sensitivity(mut self, sensitivity: i32) -> Self {
+        self.set_sensitivity(sensitivity);
+        self
+    }
+
+    /// The sensitivity changed while it listens (the settings' tester): the noise learnt is kept.
+    pub fn set_sensitivity(&mut self, sensitivity: i32) {
+        self.sensitivity = sensitivity.clamp(-SENSITIVITY_MAX, SENSITIVITY_MAX);
+        self.levels = Levels::of(self.sensitivity);
+    }
+
+    pub fn sensitivity(&self) -> i32 {
+        self.sensitivity
+    }
+
     /// The level over which a frame is speech now.
     pub fn threshold(&self) -> f32 {
-        (self.noise * OVER_NOISE).max(FLOOR)
+        self.levels.threshold(self.noise)
+    }
+
+    /// Whether it is within a sentence: from its start to the silence that ends it.
+    pub fn in_sentence(&self) -> bool {
+        self.speaking
     }
 
     /// The room's noise, as learnt.
@@ -147,6 +210,7 @@ pub struct BargeIn {
     /// What was played lately, loudest first: the echo comes back late (the output's and the room's delay).
     played: std::collections::VecDeque<f32>,
     noise: f32,
+    levels: Levels,
     over: std::collections::VecDeque<bool>,
 }
 
@@ -168,16 +232,23 @@ impl BargeIn {
             learnt_ms: 0,
             played: Default::default(),
             noise: noise.max(0.001),
+            levels: Levels::of(0),
             over: Default::default(),
         }
+    }
+
+    /// « Sensibilité du micro »: how far over the room the user must be (never what it knows of the echo).
+    pub fn with_sensitivity(mut self, sensitivity: i32) -> Self {
+        self.levels = Levels::of(sensitivity);
+        self
     }
 
     /// The level the microphone must pass now to be the user.
     pub fn threshold(&self) -> f32 {
         let loudest = self.played.iter().fold(0f32, |m, x| m.max(*x));
         (self.coupling * loudest * OVER_ECHO)
-            .max(self.noise * OVER_NOISE * 1.5)
-            .max(FLOOR * 2.0)
+            .max(self.noise * self.levels.over_noise * 1.5)
+            .max(self.levels.floor * 2.0)
     }
 
     /// The next frame: what the microphone heard (`mic`, RMS) and what was played meanwhile (`played`, RMS). True when
@@ -233,6 +304,94 @@ mod tests {
             .enumerate()
             .filter_map(|(i, l)| e.push(*l).map(|h| (i, h)))
             .collect()
+    }
+
+    #[test]
+    fn the_default_sensitivity_is_the_detector_as_it_was() {
+        assert_eq!(
+            Levels::of(0),
+            Levels {
+                over_noise: 3.2,
+                floor: 0.005
+            }
+        );
+        let e = Endpointer::new(800);
+        assert_eq!(e.sensitivity(), 0);
+        assert_eq!(e.threshold(), (0.003f32 * 3.2).max(0.005));
+        assert_eq!(
+            Endpointer::new(800).with_sensitivity(0).threshold(),
+            e.threshold()
+        );
+        // Beyond the scale, its ends.
+        assert_eq!(Levels::of(40), Levels::of(SENSITIVITY_MAX));
+        assert_eq!(Levels::of(-40), Levels::of(-SENSITIVITY_MAX));
+    }
+
+    #[test]
+    fn more_sensitive_lowers_the_threshold_less_sensitive_raises_it() {
+        let mut last = f32::MAX;
+        for s in -SENSITIVITY_MAX..=SENSITIVITY_MAX {
+            let l = Levels::of(s);
+            // In a quiet room (the floor decides) and a noisy one (the noise) alike.
+            assert!(l.threshold(0.0005) < last, "{s}");
+            last = l.threshold(0.0005);
+            assert!(
+                l.threshold(0.02) <= Levels::of(s - 1).threshold(0.02),
+                "{s}"
+            );
+            assert!(l.over_noise >= MIN_OVER_NOISE);
+        }
+    }
+
+    #[test]
+    fn a_low_voice_is_heard_when_more_sensitive_and_ignored_when_less() {
+        // A quiet room, a voice said low or far from the microphone (about -44 dBFS).
+        let mut frames = quiet(0.0008, 1500);
+        frames.extend(voice(0.012, 1500));
+        frames.extend(quiet(0.0008, 2000));
+        let heard = |s: i32| run(&mut Endpointer::new(800).with_sensitivity(s), &frames);
+        let more = heard(SENSITIVITY_MAX);
+        assert_eq!(more.len(), 2, "{more:?}");
+        assert!(matches!(more[0].1, Heard::Started { .. }));
+        assert_eq!(more[1].1, Heard::Ended);
+        // Today's detector hears it (over -46 dBFS)…
+        assert_eq!(heard(0).len(), 2);
+        // …less sensitive, it is the room.
+        assert!(heard(-SENSITIVITY_MAX).is_empty());
+        // Lower still (about -50 dBFS): only the more sensitive hears it.
+        let mut frames = quiet(0.0008, 1500);
+        frames.extend(voice(0.006, 1500));
+        frames.extend(quiet(0.0008, 2000));
+        assert_eq!(
+            run(
+                &mut Endpointer::new(800).with_sensitivity(SENSITIVITY_MAX),
+                &frames
+            )
+            .len(),
+            2
+        );
+        assert!(run(&mut Endpointer::new(800), &frames).is_empty());
+    }
+
+    #[test]
+    fn the_sensitivity_changes_nothing_but_the_threshold() {
+        // The end of a sentence comes after the same silence whatever the sensitivity.
+        for s in [-SENSITIVITY_MAX, 0, SENSITIVITY_MAX] {
+            let mut e = Endpointer::new(800).with_sensitivity(s);
+            let mut frames = quiet(0.004, 1000);
+            frames.extend(voice(0.2, 1500));
+            frames.extend(quiet(0.004, 2000));
+            let heard = run(&mut e, &frames);
+            assert_eq!(heard.len(), 2, "{s}: {heard:?}");
+            assert_eq!(heard[1], (124 + 40, Heard::Ended), "{s}");
+        }
+        // Moved while it listens: the room's noise learnt is kept.
+        let mut e = Endpointer::new(800);
+        run(&mut e, &quiet(0.02, 2000));
+        let noise = e.noise();
+        e.set_sensitivity(3);
+        assert_eq!(e.noise(), noise);
+        assert_eq!(e.threshold(), Levels::of(3).threshold(noise));
     }
 
     #[test]
@@ -326,6 +485,32 @@ mod tests {
             let echo = if i >= 5 { played[i - 5] * 0.4 } else { 0.0 };
             assert!(!b.push(echo + 0.003, *p), "frame {i}");
         }
+    }
+
+    #[test]
+    fn the_echo_is_never_the_user_however_sensitive() {
+        let played: Vec<f32> = voice(0.3, 6000);
+        let mut b = BargeIn::new(0.003).with_sensitivity(SENSITIVITY_MAX);
+        for (i, p) in played.iter().enumerate() {
+            let echo = if i >= 5 { played[i - 5] * 0.33 } else { 0.0 };
+            assert!(!b.push(echo + 0.003, *p), "frame {i}");
+        }
+    }
+
+    #[test]
+    fn with_headphones_a_low_voice_barges_in_by_the_sensitivity() {
+        let played: Vec<f32> = voice(0.3, 3000);
+        let barges = |s: i32, user: f32| {
+            let mut b = BargeIn::new(0.001).with_sensitivity(s);
+            played
+                .iter()
+                .enumerate()
+                .any(|(i, p)| b.push(if i >= 50 { user } else { 0.001 }, *p))
+        };
+        assert!(barges(SENSITIVITY_MAX, 0.006));
+        assert!(!barges(0, 0.006));
+        assert!(barges(0, 0.012));
+        assert!(!barges(-SENSITIVITY_MAX, 0.012));
     }
 
     #[test]

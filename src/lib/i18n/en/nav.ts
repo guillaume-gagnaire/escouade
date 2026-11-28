@@ -168,8 +168,8 @@ export default defineZone('nav', {
     projectMenu: 'Menu of the project {name}',
     search: 'Search',
     searchLabel: 'Search the conversations ({key})',
-    openEditor: 'Open the project’s editor',
-    openEditorTitle: 'Browse and edit the project’s files',
+    openEditor: 'Editor or workspace of the project',
+    openEditorTitle: 'Open the project’s editor, or the canvas of its agents',
     stats: 'Stats',
     minimize: 'Minimize',
     maximize: 'Maximize',
@@ -257,5 +257,8 @@ export default defineZone('nav', {
       'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
     closeConfirm: 'Close the project',
     closeErase: 'Also erase its history (conversations, tickets, settings)',
+  },
+  deepLink: {
+    agentUnknown: 'Agent not found: {id}',
   },
 });

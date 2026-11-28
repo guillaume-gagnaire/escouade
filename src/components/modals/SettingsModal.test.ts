@@ -726,6 +726,8 @@ describe('SettingsModal', () => {
             'closed_projects',
             // What the seed holds, for a harness not installed (R4).
             'plugins_list',
+            // The updates by themselves that failed (ESC-700), read with the plugins.
+            'plugins_auto_failed',
             'plugin_seed_offers',
             'data_dir',
             // The copies of the data (ESC-487): only read.
@@ -1925,7 +1927,7 @@ describe('SettingsModal in English', () => {
     expect(screen.getByRole('group', { name: 'Teardown command 1' })).toBeInTheDocument();
 
     await userEvent.click(tab('Launch'));
-    expect(h2()).toEqual(['Launch']);
+    expect(h2()).toEqual(['Launch', 'Agents’ pages']);
     const launch = group('Launch');
     expect(launch.getByText('Command 1', { selector: 'legend' })).toBeInTheDocument();
     expect(launch.getByLabelText(/^Subfolder/)).toHaveValue('web');

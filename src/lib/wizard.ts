@@ -449,10 +449,11 @@ export function applyCopy(base: WizardConfig, src: Project, checked: Set<string>
 // ---------- Checks ----------
 
 /** What would keep the way of working from working, each with its correction. */
-export type ControlId = 'noCommit' | 'noTarget' | 'tracked' | 'noAccount' | 'noClaude';
+export type ControlId = 'unread' | 'noCommit' | 'noTarget' | 'tracked' | 'noAccount' | 'noClaude';
 
 /** The step each check is told in, besides the summary. */
 export const CONTROL_STEP: Record<ControlId, StepId> = {
+  unread: 'start',
   noCommit: 'start',
   noTarget: 'kanban',
   tracked: 'worktrees',
@@ -461,17 +462,20 @@ export const CONTROL_STEP: Record<ControlId, StepId> = {
 };
 
 /**
- * The checks that fail for the folder (`info`; null: no repository read) and the settings: no commit (no ticket
- * starts), a target branch the folder does not have, worktrees in a folder git tracks files in, no Claude account that
- * may serve the project (`projectId`: an existing one's reservations count), Claude Code not found.
+ * The checks that fail for the folder (`info`; null: not read yet, or git failed to read it, `ctx.unread`) and the
+ * settings: the folder git failed to read (said, with « Réessayer »), no commit (no ticket starts), a target branch the
+ * folder does not have, worktrees in a folder git tracks files in, no Claude account that may serve the project
+ * (`projectId`: an existing one's reservations count), Claude Code not found. A folder not read is never one without a
+ * commit (ESC-687): its first commit would be offered in a repository that has some.
  */
 export function controls(
   info: SetupInfo | null,
   c: WizardConfig,
-  ctx: { accounts: Account[]; claudeFound: boolean; projectId?: string },
+  ctx: { accounts: Account[]; claudeFound: boolean; projectId?: string; unread?: boolean },
 ): ControlId[] {
   const out: ControlId[] = [];
-  if (!info?.hasCommit) out.push('noCommit');
+  if (ctx.unread) out.push('unread');
+  else if (info && !info.hasCommit) out.push('noCommit');
   if (info?.hasCommit && (c.board.action === 'merge' || c.board.action === 'pr') && !targetFound(c.board.target, info))
     out.push('noTarget');
   if (info?.worktreesTracked) out.push('tracked');

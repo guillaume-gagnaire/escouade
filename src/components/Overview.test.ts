@@ -68,6 +68,14 @@ describe('Overview', () => {
     app.now = NOW;
   });
 
+  it('opens the « Workspace » of every project from its header', async () => {
+    backend();
+    app.openOverview();
+    render(Overview);
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+    expect(app.overviewCanvasOn).toBe(true);
+  });
+
   it('groups every project’s agents, those waiting for an answer at the top, the longest waiting first', () => {
     backend();
     resetApp({

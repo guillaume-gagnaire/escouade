@@ -3,6 +3,7 @@
 // view) in a trial project of the test's: a small workflow of two doors laid out where the harness keeps its commands
 // (`etude` runs `ecrire`), an agent that goes through them, and what the app saw of it: the steps, the history, the files
 // written in `.escouade/workflows/` (no absolute path, no date, untouched by a second reading), no commit by the app.
+// What the app saw is read in « Workflows » of the « Workspace » and on the diagram from it (ESC-689).
 //
 // Skipped unless ESCOUADE_E2E_REAL names what to try (`claude,claude-view,codex,opencode,copilot,cursor,cursor-view`):
 // each costs real usage. The programs are named as for real-harnesses.spec.ts (ESCOUADE_REAL_CLAUDE / _CODEX / _OPENCODE /
@@ -230,20 +231,42 @@ async function turn(page: Page, text: string) {
   }
 }
 
-async function openTab(page: Page) {
-  const side = page.locator('aside.git-side');
-  if (!(await side.isVisible())) await page.keyboard.press('Control+Shift+B');
-  await side.getByRole('tab', { name: /^Workflow/ }).click();
-  return side.getByTestId('workflow');
-}
-
-/** What the tab says, for the notes. */
-async function dump(page: Page, label: string) {
-  const tab = await openTab(page);
-  const text = ((await tab.textContent()) ?? '').replace(/\s+/g, ' ').trim();
+/**
+ * « Workflows » of the « Workspace » (ESC-689, in the place of the Workflow tab): the project's workflows, its steps
+ * counted, the agent on its step; and that agent's path, from its line, on the workflow's diagram. Left as it was found:
+ * the canvas closed, back to the conversation.
+ */
+async function readWorkflows(page: Page, label: string) {
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Workspace' }).click();
+  await page
+    .locator('.ws')
+    .getByRole('button', { name: /^Workflows/ })
+    .click();
+  const panel = page.getByTestId('workspace-workflows');
+  await expect(panel).toBeVisible();
+  const text = ((await panel.textContent()) ?? '').replace(/\s+/g, ' ').trim();
   console.log(`${label}: ${text.slice(0, 1200)}`);
   await snap(page, label);
-  return tab;
+  const cap = (
+    (await panel
+      .locator('li.wf .cap')
+      .first()
+      .textContent()
+      .catch(() => '')) ?? ''
+  ).trim();
+  const steps = Number(/(\d+) étapes?/.exec(cap)?.[1] ?? 0);
+  let history: string[] = [];
+  const line = panel.locator('li.wf .who button').first();
+  if (await line.count()) {
+    await line.click();
+    history = await page.getByTestId('workflow-path').locator('li').allTextContents();
+    await page.keyboard.press('Escape');
+  }
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.ws')).toHaveCount(0);
+  return { steps, history };
 }
 
 /** The files `.escouade/workflows/*.yml` of the project: their texts, by name. */
@@ -298,13 +321,12 @@ async function chatTrial(app: App, h: Harness) {
   await addProject(page, app.repo, { firstAgent: false });
   await newAgent(page, h);
   await snap(page, `${h}-agent`);
-  let tab = await dump(page, `${h}-before`);
+  await readWorkflows(page, `${h}-before`);
   await turn(page, '/etude Fais ce que dit cette commande.');
-  await dump(page, `${h}-after-etude`);
+  await readWorkflows(page, `${h}-after-etude`);
   await turn(page, '/ecrire Fais ce que dit cette commande.');
-  tab = await dump(page, `${h}-after-ecrire`);
-  await expect(tab.locator('.wf-step')).toHaveCount(2, { timeout: 30_000 });
-  const history = await tab.locator('.wf-hist .ev .what b').allTextContents();
+  await expect.poll(async () => (await readWorkflows(page, `${h}-after-ecrire`)).steps, { timeout: 30_000 }).toBe(2);
+  const { history } = await readWorkflows(page, `${h}-history`);
   console.log(`${h}: history: ${history.join(' > ')}`);
   expect(history.length, 'both doors in the history').toBeGreaterThanOrEqual(2);
   checkFiles(app.repo, commits);
@@ -312,8 +334,7 @@ async function chatTrial(app: App, h: Harness) {
   // A teammate's file: the doors taken out of the project, the workflow is still followed from its file.
   fs.rmSync(path.join(app.repo, DOORS[h].split('/')[0]), { recursive: true, force: true });
   await rereadLeavesFiles(app.page, app.repo);
-  const again = await dump(page, `${h}-no-sources`);
-  await expect(again.locator('.wf-step')).toHaveCount(2);
+  expect((await readWorkflows(page, `${h}-no-sources`)).steps).toBe(2);
   expect(git(app.repo, 'log', '--format=%h %s')).toBe(commits);
 }
 
@@ -352,8 +373,7 @@ async function viewTrial(app: App, h: Harness, trust: string[]) {
   await page.waitForTimeout(10_000);
   await idle(page);
   await snap(page, `${h}-view-done`);
-  const tab = await dump(page, `${h}-view-tab`);
-  const history = await tab.locator('.wf-hist .ev .what b').allTextContents();
+  const { history } = await readWorkflows(page, `${h}-view-tab`);
   console.log(`${h}: view history: ${history.join(' > ')}`);
   expect(history.length, 'the door typed in the view is a step').toBeGreaterThanOrEqual(1);
   expect(git(app.repo, 'log', '--format=%h %s')).toBe(commits);

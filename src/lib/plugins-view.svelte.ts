@@ -7,6 +7,8 @@ import { t } from './i18n';
 import {
   contributionsOf,
   pluginsApi,
+  updatedToday,
+  type AutoFailed,
   type Category,
   type Manifest,
   type PluginPreview,
@@ -14,12 +16,12 @@ import {
   type PluginView,
   type SeedOffer,
 } from './plugins';
-import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
+import { storeApi, type CatalogPlugin, type StoreView, type Suggestion } from './store';
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
-import { overseer } from './overseer.svelte';
 import { teamPluginsApi } from './team-plugins';
+import type { PluginsAutoUpdate } from './types';
 
 export type PluginTab = 'overview' | 'permissions' | 'versions' | 'projects' | 'settings' | 'journal';
 
@@ -79,6 +81,8 @@ class PluginsStore {
   ahead = $state<PluginPreview[]>([]);
   /** How each update under way goes, by id, on its line of the updates' page (ESC-436); the finished ones until it is left. */
   rows = $state<Record<string, UpdateRow>>({});
+  /** The updates by themselves that failed since the start (ESC-700): said at the head of the page Mises à jour. */
+  autoFailed = $state<AutoFailed[]>([]);
   /** The store as the core keeps it (STORE-9): its catalogue cached, when it was read. */
   store = $state<StoreView | null>(null);
   storeBusy = $state(false);
@@ -217,34 +221,21 @@ class PluginsStore {
     app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
+  /** « Mettre à jour tout seuls » (ESC-700): saved with the app's settings; off (`never`) by default. */
+  setAutoUpdate(choice: PluginsAutoUpdate) {
+    app.settings.pluginsAutoUpdate = choice;
+    app.run(api.saveSettings($state.snapshot(app.settings)));
+  }
+
+  /** The plugins updated by themselves today (ESC-700): the line at the head of the page Mises à jour. */
+  get updatedToday() {
+    return updatedToday(this.list);
+  }
+
   /** A plugin of the store: its page in the view, the installed one's when it is installed. */
   openStorePlugin(id: string, tab: StoreTab = 'overview') {
     if (this.byId(id)) this.openPlugin(id);
     else this.show({ kind: 'storePlugin', id, tab });
-  }
-
-  /**
-   * The links `escouade://` not yet taken (STORE-11): a plugin's page opened in the view, a link it cannot read said. Never
-   * an install: that stays the user's gesture, from the page, with its permissions shown.
-   */
-  async takeLinks() {
-    let links: DeepLink[] = [];
-    try {
-      links = (await storeApi.deepLinks()) ?? [];
-    } catch {
-      return;
-    }
-    for (const link of links) {
-      if (link.kind === 'plugin') {
-        app.openPlugins();
-        this.openStorePlugin(link.id);
-      } else if (link.kind === 'overseer') {
-        overseer.open = true;
-      } else if (link.kind === 'teamJoin') {
-        // Joining stays the user's gesture: the link is shown with its server and the team's six words.
-        app.modal = { kind: 'team', step: 'join', link: link.link };
-      } else app.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
-    }
   }
 
   /** « Installer » of a team's plugin (TS-14): read from the team's server, checked again, shown before anything. */
@@ -260,6 +251,7 @@ class PluginsStore {
   async load() {
     try {
       this.list = (await pluginsApi.list()) ?? [];
+      this.autoFailed = (await pluginsApi.autoFailed().catch(() => null)) ?? this.autoFailed;
       await this.loadOffers();
     } catch (e) {
       this.error = errorText(e);
@@ -363,6 +355,8 @@ class PluginsStore {
       if (got) {
         this.list = got.plugins;
         this.store = got.store;
+        // What installed by itself after the search (ESC-700) is in `plugins`; what failed, here.
+        if (got.autoFailed) this.autoFailed = got.autoFailed;
       }
     } catch (e) {
       this.error = errorText(e);

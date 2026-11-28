@@ -1,6 +1,6 @@
 // A launch's page inside Escouade (ESC-311): « ▶ Tester » ready, the page of the developed app opens by itself in the
-// agent's view, in a webview apart: no command of Escouade answers it, its storage is its project's, another origin
-// goes to the system's browser; its devtools open from its bar.
+// agent's view, in a webview apart: no command of Escouade answers it, its storage is its project's, a mail address
+// goes to the system; its devtools open from its bar.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,7 +54,7 @@ test('a ready launch opens its page in the agent, apart from Escouade, and its d
   const pwned = path.join(app.data, 'pwned');
   const widths = path.join(app.data, 'largeurs.txt');
   // The developed app: its page tries every way into Escouade, keeps something in its storage, says what it got, then
-  // leaves for another origin (127.0.0.1 is not localhost).
+  // opens a mail address (any web origin stays in the tab since ESC-695: browsers-signin.spec.ts).
   fs.writeFileSync(
     path.join(app.repo, 'serveur.js'),
     `const fs = require('node:fs');
@@ -77,7 +77,7 @@ addEventListener('resize', () => fetch('/width?w=' + innerWidth));
   localStorage.setItem('mark', 'esc-311');
   r.storage = localStorage.getItem('mark');
   await fetch('/report', { method: 'POST', body: JSON.stringify(r) });
-  setTimeout(() => { location.href = 'http://127.0.0.1:\${port}/ailleurs'; }, 300);
+  setTimeout(() => { location.href = 'mailto:recette@example.com'; }, 300);
 })();
 </script>\`;
 require('node:http').createServer((req, res) => {
@@ -130,9 +130,9 @@ require('node:http').createServer((req, res) => {
   const pages = path.join(app.data, 'pages');
   await expect.poll(() => fs.existsSync(pages) && fs.readdirSync(pages).length, { timeout: 15_000 }).toBe(1);
 
-  // Another origin went to the system's browser, and the window says so; the page stayed on its own.
-  await expect.poll(opened, { timeout: 15_000 }).toEqual([`http://127.0.0.1:${port}/ailleurs`]);
-  await expect(page.getByText(`127.0.0.1:${port} s’est ouvert dans ton navigateur`)).toBeVisible();
+  // The mail address went to the system, and the window says so; the page stayed where it was.
+  await expect.poll(opened, { timeout: 15_000 }).toEqual(['mailto:recette@example.com']);
+  await expect(page.getByText('mailto:recette@example.com s’est ouvert hors d’Escouade')).toBeVisible();
   await expect(address).toHaveValue(`http://localhost:${port}/fonction`);
 
   // A phone's width: the page itself is 390 px wide, centred; a tablet's, 768; back to the whole room.

@@ -11,13 +11,19 @@
     browsersOf,
     closePage,
     go,
+    hasConsents,
+    lendBrowser,
     newBrowser,
     openPageBeside,
     pageItem,
+    revokeConsents,
     rowName,
     showPage,
     type PageState,
   } from '../lib/devpage.svelte';
+  import { agentpages, latestOf, pageOfKey } from '../lib/agentpages.svelte';
+  import { driveOf, moveHand } from '../lib/drives.svelte';
+  import { initials } from '../lib/project-rail';
   import { t } from '../lib/i18n';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { openUrl } from '../lib/opener';
@@ -75,8 +81,80 @@
     if (!typed.trim()) adding = false;
   }
 
-  /** Its dot, in a word: loading (amber), loaded (green), not answering (red). */
-  const tone = (p: PageState) => (p.phase === 'ready' ? 'on' : p.phase === 'stalled' ? 'bad' : 'wait');
+  /** Its dot, in a word: loading or waiting for the user (amber), loaded (green), not answering (red). */
+  const tone = (p: PageState) => (p.waiting ? 'wait' : p.phase === 'ready' ? 'on' : p.phase === 'stalled' ? 'bad' : 'wait');
+
+  /** The agent's name, for a row it opened or that waits for the user (ESC-678). */
+  const agentName = (id: string | undefined) => (id ? (app.agents[id]?.name ?? id) : '');
+
+  /** Its tip: what waits for the user, else its address. */
+  /** An agent's page (AP-3): its version tag (« v2 »), its agent. */
+  const pageInfo = (key: string) => {
+    const id = pageOfKey(key);
+    return id ? (agentpages.info[id] ?? null) : null;
+  };
+  /** Who drives it (AB-8), said first: the user always sees that an agent drives. */
+  const drivenSay = (key: string) => {
+    const d = driveOf(key);
+    if (!d) return '';
+    const agent = agentName(d.agent ?? undefined);
+    if (d.stopped) return t('devpage.drive.rowStopped');
+    return d.hand === 'agent' ? t('devpage.drive.rowDriven', { agent }) : t('devpage.drive.rowYours', { agent });
+  };
+  const tipOf = (key: string, p: PageState) => {
+    const said = baseTip(key, p);
+    const driven = drivenSay(key);
+    return driven ? `${driven} · ${said}` : said;
+  };
+  const baseTip = (key: string, p: PageState) => {
+    const info = pageInfo(key);
+    const name = (p.by.kind === 'page' && app.agents[p.by.id]?.name) || info?.agentName || '';
+    if (p.by.kind === 'page') return t('devpage.agentPage.rowTip', { title: p.title, agent: name });
+    return p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : p.url;
+  };
+
+  /** The driving's moves in a row's menu (AB-8): take the hand or give it back, stop letting it drive. */
+  function driveItems(key: string): MenuItem[] {
+    const d = driveOf(key);
+    if (!d || d.stopped) return [];
+    return [
+      d.hand === 'agent'
+        ? { label: t('devpage.drive.take'), icon: 'pause', onClick: () => void moveHand(key, 'take') }
+        : { label: t('devpage.drive.give'), icon: 'play', onClick: () => void moveHand(key, 'give') },
+      { label: t('devpage.drive.stop'), icon: 'close', onClick: () => void moveHand(key, 'stop') },
+      { label: '', separator: true },
+    ];
+  }
+
+  /**
+   * « Laisser piloter par… » (AB-9), on a browser the user opened alone: the live agents of its project, the one that
+   * drives it ticked, and « Personne ».
+   */
+  function lendItems(key: string, p: PageState): MenuItem[] {
+    if (p.by.kind !== 'user' || p.opener) return [];
+    const agents = Object.values(app.agents)
+      .filter((a) => a.projectId === project.id && !a.archived)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const submenu: MenuItem[] = agents.length
+      ? [
+          ...agents.map((a) => ({
+            label: a.name,
+            checked: p.driver === a.id,
+            onClick: () => void lendBrowser(key, a.id),
+          })),
+          ...(p.driver
+            ? ([
+                { label: '', separator: true },
+                { label: t('devpage.drive.lendNobody'), onClick: () => void lendBrowser(key, null) },
+              ] satisfies MenuItem[])
+            : []),
+        ]
+      : [{ label: t('devpage.drive.lendNone'), disabled: true }];
+    return [
+      { label: t('devpage.drive.lend'), icon: 'play', submenu },
+      { label: '', separator: true },
+    ];
+  }
 
   function rowMenu(e: MouseEvent, key: string, p: PageState) {
     // Beside what is on screen; a browser opened alone and shown alone has nothing to go beside.
@@ -92,8 +170,19 @@
             { label: '', separator: true },
           ]
         : [];
+    // An agent's page: beside or below, and close its row (the page stays kept, its card opens it again).
+    if (p.by.kind === 'page') {
+      menu.show(e, [
+        ...beside,
+        ...driveItems(key),
+        { label: t('devpage.agentPage.closeRow'), icon: 'close', onClick: () => closePage(key) },
+      ]);
+      return;
+    }
     const items: MenuItem[] = [
       ...beside,
+      ...lendItems(key, p),
+      ...driveItems(key),
       { label: t('devpage.reload'), icon: 'restart', onClick: () => go(key, 'reload') },
       {
         label: t('devpage.browsers.copy'),
@@ -101,6 +190,13 @@
         onClick: () => app.run(navigator.clipboard.writeText(p.url).then(() => app.toast(t('devpage.browsers.copied'), 'info'))),
       },
       { label: t('devpage.system'), icon: 'ext', onClick: () => app.run(openUrl(p.url)) },
+      // The agents' leaves to read it outside the launch (ESC-669), while it has some.
+      ...(hasConsents(key)
+        ? ([
+            { label: '', separator: true },
+            { label: t('devpage.consent.revoke'), icon: 'close', onClick: () => void revokeConsents(key) },
+          ] satisfies MenuItem[])
+        : []),
       { label: '', separator: true },
       { label: t('devpage.browsers.close'), icon: 'close', onClick: () => closePage(key) },
     ];
@@ -108,6 +204,9 @@
   }
 
   function click(e: MouseEvent, key: string) {
+    // A row that waited is shown now: it waits no more.
+    const p = rows.find(([k]) => k === key)?.[1];
+    if (p?.waiting) p.waiting = undefined;
     if (e.ctrlKey || e.metaKey) openPageBeside(key, 'right');
     else showPage(key);
   }
@@ -155,29 +254,54 @@
     {/if}
     {#each rows as [key, p] (key)}
       {@const tn = tone(p)}
+      {@const drive = driveOf(key)}
       <div
         class="row-item browser"
         class:sel={selected(key)}
         class:inpane={inPane(key)}
+        class:waits={!!p.waiting}
+        class:driven={!!drive && drive.hand === 'agent' && !drive.stopped}
+        data-driven={drive ? (drive.stopped ? 'stopped' : drive.hand) : undefined}
         role="button"
         tabindex="0"
         aria-current={selected(key) ? 'true' : undefined}
         data-browser={key}
-        use:tip={{ text: p.url, aria: false }}
+        use:tip={{ text: tipOf(key, p), aria: false }}
         onclick={(e) => click(e, key)}
         onpointerdown={(e) => paneDrag.press(e, pageItem(key), rowName(p))}
         oncontextmenu={(e) => rowMenu(e, key, p)}
         onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && showPage(key)}
       >
-        <i class="d {tn}" aria-hidden="true"></i>
-        <span class="nm">{rowName(p)}</span>
-        <span class="sr">{t(`devpage.browsers.state.${p.phase}`)}</span>
-        {#if p.by.kind === 'agent'}<span class="by" aria-hidden="true"><Icon name="branch" size={11} /></span>{/if}
+        {#if drive}
+          <!-- Driven (AB-8): the agent's initials before the name, in the project's colour; dimmed once the user has the hand. -->
+          <span class="av" class:held={drive.hand === 'user' || drive.stopped} aria-hidden="true" data-testid="driven-avatar"
+            >{initials(agentName(drive.agent ?? undefined))}</span
+          >
+          <span class="sr">{drivenSay(key)}</span>
+        {/if}
+        {#if p.by.kind === 'page'}
+          <!-- An agent's page (AP-3): the page's icon for the dot; its point while it waits for the user. -->
+          <span class="pg" class:unseen={p.unseen} aria-hidden="true"><Icon name="page" size={13} /></span>
+          <span class="nm">{rowName(p)}</span>
+          {#if p.unseen}<span class="sr">{t('devpage.agentPage.unseen')}</span>{/if}
+          {@const info = pageInfo(key)}
+          {#if info}<span class="vtag" data-testid="page-row-version">{t('devpage.agentPage.version', { n: latestOf(info) })}</span>{/if}
+        {:else}
+          <i class="d {tn}" aria-hidden="true"></i>
+          <span class="nm">{rowName(p)}</span>
+          <span class="sr"
+            >{p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : t(`devpage.browsers.state.${p.phase}`)}</span
+          >
+          {#if p.by.kind === 'agent'}<span class="by" aria-hidden="true"><Icon name="branch" size={11} /></span>{/if}
+          {#if p.opener}<span class="by" use:tip={t('devpage.browsers.opener', { name: agentName(p.opener) })}
+              ><Icon name="agents" size={11} /></span
+            >{/if}
+        {/if}
         <span class="ra">
           <button
             class="icon-btn x"
-            aria-label={t('devpage.browsers.close')}
-            use:tip={{ text: t('devpage.browsers.close'), aria: false }}
+            aria-label={p.by.kind === 'page' ? t('devpage.agentPage.closeRow') : t('devpage.browsers.close')}
+            use:tip={{ text: p.by.kind === 'page' ? t('devpage.agentPage.closeRow') : t('devpage.browsers.close'), aria: false }}
             onclick={(e) => {
               e.stopPropagation();
               closePage(key);
@@ -270,6 +394,11 @@
   .d.bad {
     background: var(--del);
   }
+  /* Its agent wants to show it while the user looks elsewhere (ESC-678): it opens beside the conversation once they
+     come back to it. */
+  .row-item.waits .nm {
+    color: var(--warn-ink);
+  }
   .nm {
     min-width: 0;
     overflow: hidden;
@@ -277,6 +406,63 @@
     font-weight: 550;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Driven (AB-8): the agent's initials in the project's colour before the name; held by the user, a quiet outline. */
+  .av {
+    flex: none;
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 5px;
+    background: var(--p);
+    color: #0b0c0e;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+  .av.held {
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--line-3);
+    color: var(--muted);
+  }
+  .row-item.driven .nm {
+    color: var(--text);
+  }
+  /* An agent's page: the page's icon in the project's ink, a point on it while it waits for the user. */
+  .pg {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    margin-left: -3px;
+    color: var(--p-ink);
+  }
+  .pg.unseen::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wait);
+    box-shadow: 0 0 0 2px var(--frame);
+  }
+  /* Its last version, as the design's « v2 »: a hairline tag. */
+  .vtag {
+    flex: none;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
   }
   /* Opened by an agent's launch: its worktree's mark, as the chip of its bar. */
   .by {

@@ -38,7 +38,7 @@ Ce qu’Escouade comprend d’un workflow tiré de la config du dépôt (ses por
 - Un fichier qui revient (un `git pull`, une autre branche) rend le workflow au projet.
 - « Ce n’est pas un workflow » reste l’autre façon de l’écarter : son fichier est gardé, marqué, pour que toute l’équipe l’écarte aussi.
 
-« Pas de workflow pour ce projet », dans l’assistant « Nouveau projet » (étape Kanban) ou en haut de Réglages › Projets › Kanban › Workflow, coupe tout. Escouade ne lit plus les workflows du projet, n’écrit aucun fichier et n’y suit aucun agent. Ce qui est déjà dans `.escouade/workflows/` reste tel quel. L’onglet Workflow le dit, avec où le défaire : « Lire les workflows », puis « Enregistrer ». Dans un projet partagé, c’est la clé `workflows.enabled: false` de son [`.escouade.yml`](escouade-yml).
+« Pas de workflow pour ce projet », dans l’assistant « Nouveau projet » (étape Kanban) ou en haut de Réglages › Projets › Kanban › Workflow, coupe tout. Escouade ne lit plus les workflows du projet, n’écrit aucun fichier et n’y suit aucun agent. Ce qui est déjà dans `.escouade/workflows/` reste tel quel. « Workflows », dans le Workspace, le dit, avec où le défaire : « Lire les workflows », puis « Enregistrer ». Dans un projet partagé, c’est la clé `workflows.enabled: false` de son [`.escouade.yml`](escouade-yml).
 
 ## Où en est chaque agent
 
@@ -48,7 +48,9 @@ Chaque passage dans une étape reste dans l’historique de l’agent : l’heur
 
 ## Le diagramme : où ça peut aller, où ça va vraiment
 
-Dans l’onglet Workflow, la vue « Diagramme » part toujours d’un point d’entrée.
+Dans le Workspace, la carte de chaque agent qui suit un workflow dit son étape (« GSD · Planifier · 2ᵉ passage », « en cours »), et en rouge le retour qui l’y a renvoyé, avec sa raison. Un clic sur elle ouvre le diagramme en grand, avec le chemin de cet agent. « Workflows », en haut à droite de la toile, liste les workflows du projet et leurs agents, ouvre le diagramme de chacun sans agent, copie en Mermaid et mène aux réglages. Échap referme le diagramme.
+
+Le diagramme part toujours d’un point d’entrée.
 
 - **Avec un agent**, c’est la porte par laquelle il est entré : la commande ou la skill qu’il a tapée, la boucle de prompt, sinon la première étape où Escouade l’a vu. Elle est écrite en tête, « Entrée », en trait plein.
 - **Sans agent**, tu choisis la porte dans « Entrée : par où l’agent commence ». La première est prise par défaut ; les flèches du clavier passent de l’une à l’autre.
@@ -60,7 +62,7 @@ Deux traits se lisent d’un coup d’œil :
 - **ce qui est possible** : trait léger et pointillé, étapes au bord pointillé, avec les conditions des choix et des retours ;
 - **ce que l’agent a pris** : trait plein et épais. Chaque passage porte son numéro sur son étape, dans l’ordre du parcours (« 1, 2, 5 » sur une étape où il est revenu). Un retour pris est plein et rouge, avec la raison que l’étape a donnée ; une boucle dit ses tours (« 1/3 »). L’étape en cours est entourée de vert et dit « en cours », la suivante « ensuite ».
 
-Les autres agents du même workflow restent des pastilles sur leur étape ; choisis-en un dans la liste pour voir son chemin. La vue agrandie suit la même logique.
+Les autres agents du même workflow restent des pastilles sur leur étape ; son chemin se lit depuis sa carte, ou sa ligne dans « Workflows ».
 
 Pour un lecteur d’écran, le chemin est aussi une liste ordonnée : « Planifier, entrée par /gsd:plan-phase », « Planifier, retour depuis Vérifier : 2 tests rouges, 3e passage », « Exécuter, 2e passage, en cours ». Le chemin vient de l’historique de l’agent : il revient tel quel après un redémarrage.
 
@@ -87,7 +89,7 @@ Trois précisions vues en vrai : une porte que l’agent lance seul (Claude Code
 
 Trois outils, tous en lecture seule (voir [le serveur MCP](mcp) pour les autres) :
 
-- **`get_workflow`** (`project`) : les workflows du projet, comme l’onglet Workflow les montre. Pour chacun, ses portes, ses étapes (commande, sous-agents, fichiers lus et écrits), ses retours (`back`, avec leur `condition` et leur `max`) et, sur chaque étape, les agents qui y sont maintenant (`agentsHere` : id, nom, depuis quand, Nᵉ passage). Les agents qui suivent un workflow sans être sur une étape sont à part (`agentsElsewhere`).
+- **`get_workflow`** (`project`) : les workflows du projet, comme le Workspace les montre. Pour chacun, ses portes, ses étapes (commande, sous-agents, fichiers lus et écrits), ses retours (`back`, avec leur `condition` et leur `max`) et, sur chaque étape, les agents qui y sont maintenant (`agentsHere` : id, nom, depuis quand, Nᵉ passage). Les agents qui suivent un workflow sans être sur une étape sont à part (`agentsElsewhere`).
 - **`list_agents`** : chaque agent gagne `workflow`, son nom, son étape, son tour (celui d’un prompt rejoué, ou la boucle de son ticket) et depuis quand ; `null` quand il n’en suit aucun.
 - **`get_agent_summary`** : le même `workflow`, et l’historique des étapes (`history`, les 100 derniers passages, du plus ancien au plus récent).
 

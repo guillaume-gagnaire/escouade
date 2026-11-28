@@ -1,7 +1,7 @@
-// The side panel (Non commités, Historique, Workflow, PR et CI) widened by its left edge (ESC-659), as the sidebar is by
+// The side panel (Non commités, Historique, PR et CI) widened by its left edge (ESC-659), as the sidebar is by
 // its right one: beside the conversation and docked side by side, each its own width, kept after a restart, the
-// keyboard, a double click, held to the room the conversation keeps, its tabs packed by its container queries when
-// narrow and back when wide. In the runner's window (1024 × 728) and at 1440 × 900.
+// keyboard, a double click, held to the room the conversation keeps, its three tabs packed by its container query when
+// narrow, all there (ESC-689: the Workflow tab gone, « PR et CI » no longer leaves). In the runner's window (1024 × 728) and at 1440 × 900.
 
 import type { Page } from '@playwright/test';
 import { addProject, expect, test } from './fixture';
@@ -79,8 +79,8 @@ for (const size of [
     expect(widest).toBeGreaterThan(340);
     await edge(page).hover();
     await expect(page.getByRole('tooltip')).toContainText('double clic : largeur par défaut');
-    // Narrow, « PR et CI » leaves the strip for the × (its container query).
-    await expect(page.locator('#side-tab-hosts')).toBeHidden();
+    // Narrow, its three tabs drawn closer, « PR et CI » with them (ESC-689).
+    await expect(page.locator('#side-tab-hosts')).toBeVisible();
     expect(await breaks(page)).toEqual([]);
 
     // Dragged left by 40 px: 40 px wider. Then far to the left: held at its widest, the conversation keeping its room.
@@ -112,7 +112,7 @@ for (const size of [
     await page.keyboard.press('Home');
     await settle(page);
     expect(await width(page)).toBe(340);
-    await expect(page.locator('#side-tab-hosts')).toBeHidden();
+    await expect(page.locator('#side-tab-hosts')).toBeVisible();
     // Dragged far to the right: held at its narrowest.
     await drag(page, 1500);
     expect(await width(page)).toBe(340);

@@ -72,8 +72,21 @@ pub const CATALOG: &[ModelInfo] = &[
     },
 ];
 
-/// Where the models are downloaded from: `<base>/ggml-<id>.bin`.
-pub const MODELS_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+/// The commit of `ggerganov/whisper.cpp` on Hugging Face the models are taken at (ESC-664), where each file has the
+/// size and SHA-256 of `CATALOG` (checked 2026-11-25): a model changed upstream never breaks a download. Changing it is
+/// a change of the catalog, its sizes and SHA-256 checked again.
+macro_rules! whisper_revision {
+    () => {
+        "5359861c739e955e79d9a303bcbc70fb988958b1"
+    };
+}
+pub const MODELS_REVISION: &str = whisper_revision!();
+
+/// Where the models are downloaded from: `<base>/ggml-<id>.bin`, at `MODELS_REVISION`.
+pub const MODELS_URL: &str = concat!(
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/",
+    whisper_revision!()
+);
 
 pub fn find(id: &str) -> Option<&'static ModelInfo> {
     CATALOG.iter().find(|m| m.id == id)
@@ -176,6 +189,14 @@ pub async fn fetch_checked(
         .send()
         .await?
         .error_for_status()?;
+    // A server that says another size: the file published is no longer the one of the catalog.
+    if let Some(got) = res.content_length().filter(|&n| n != size) {
+        bail!(FileChanged {
+            got,
+            expected: size,
+            more: false
+        });
+    }
     let part = PathBuf::from(format!("{}.part", path.display()));
     let result: Result<()> = async {
         let mut file = std::io::BufWriter::new(std::fs::File::create(&part)?);
@@ -191,7 +212,11 @@ pub async fn fetch_checked(
             hash.update(&chunk);
             done += chunk.len() as u64;
             if done > size {
-                bail!("{} bytes and more, {} expected", done, size);
+                bail!(FileChanged {
+                    got: done,
+                    expected: size,
+                    more: true
+                });
             }
             if told.elapsed() >= Duration::from_millis(100) {
                 told = Instant::now();
@@ -234,6 +259,30 @@ impl std::fmt::Display for Cancelled {
 }
 
 impl std::error::Error for Cancelled {}
+
+/// The file served is not of the size the catalog expects (ESC-664): the file published has changed (a model
+/// retrained upstream), not the user's network; it is for Escouade to update its catalog.
+#[derive(Debug, PartialEq)]
+pub struct FileChanged {
+    pub got: u64,
+    pub expected: u64,
+    /// `got` bytes came and more were coming (the server did not say its size).
+    pub more: bool,
+}
+
+impl std::fmt::Display for FileChanged {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the published file has changed: {}{} bytes, {} expected",
+            if self.more { "over " } else { "" },
+            if self.more { self.expected } else { self.got },
+            self.expected
+        )
+    }
+}
+
+impl std::error::Error for FileChanged {}
 
 /// What was downloaded is not the model: not kept.
 #[derive(Debug)]

@@ -397,7 +397,9 @@ impl crate::core::Core {
             rg.ahead = st.ahead;
             rg.behind = st.behind;
             rg.has_remote = !remotes.is_empty();
-            rg.has_commit = commit;
+            // Git failed to read it (ESC-687): not shown as one without a commit, which the
+            // window would warn of; starting a worktree there checks again (`multiwt`).
+            rg.has_commit = commit.unwrap_or(true);
             for e in &st.entries {
                 tally(e.status, &mut rg.modified, &mut rg.added, &mut rg.deleted);
                 entries.push(prefixed(&c.repo, &e.path));

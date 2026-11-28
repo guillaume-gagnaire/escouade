@@ -202,8 +202,8 @@ export default {
     search: 'Rechercher',
     /** `{key}`: the shortcut. */
     searchLabel: 'Rechercher dans les conversations ({key})',
-    openEditor: 'Ouvrir l’éditeur du projet',
-    openEditorTitle: 'Parcourir et éditer les fichiers du projet',
+    openEditor: 'Éditeur ou workspace du projet',
+    openEditorTitle: 'Ouvrir l’éditeur du projet, ou la toile de ses agents',
     stats: 'Stats',
     minimize: 'Réduire',
     maximize: 'Agrandir',
@@ -307,5 +307,9 @@ export default {
     closeConfirm: 'Fermer le projet',
     /** The box of the question, unchecked: closing keeps the history unless it is checked. */
     closeErase: 'Effacer aussi son historique (conversations, tickets, réglages)',
+  },
+  // A link `escouade://agent/<id>` (PR #47) to an agent this window does not know: said, nothing else done.
+  deepLink: {
+    agentUnknown: 'Agent introuvable : {id}',
   },
 } as const satisfies Tree;

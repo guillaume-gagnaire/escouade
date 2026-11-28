@@ -13,6 +13,9 @@ export type AgentsMcp = 'all' | 'escouade';
 /** Who among the agents answers another agent's permissions and questions (ESC-423). */
 export type AgentsAnswer = 'nobody' | 'chef' | 'all';
 
+/** « Mettre à jour tout seuls » (ESC-700). */
+export type PluginsAutoUpdate = 'never' | 'escouade' | 'verified';
+
 export interface Settings {
   claudePath: string;
   sound: boolean;
@@ -97,6 +100,10 @@ export interface Settings {
   mcpEnabled: boolean;
   /** « Les agents peuvent répondre aux demandes des autres agents » (ESC-423): nobody by default. */
   agentsAnswer?: AgentsAnswer;
+  /** « Agents et navigateurs » (ESC-669), under « Les agents peuvent piloter Escouade »: the tools of the browsers answer the agents (`list_browsers`, `read_browser`). On unless false. */
+  agentBrowsers?: boolean;
+  /** « Pages des agents » (ESC-673), under « Les agents peuvent piloter Escouade »: `show_page`, `get_page` and `close_page` are offered to the agents. On unless false. */
+  agentPages?: boolean;
   /** « Garder les fichiers des demandes closes », in days: 7, 30 (by default) or 90. */
   inboxKeepDays?: number;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
@@ -121,6 +128,11 @@ export interface Settings {
   pluginTheme?: string;
   /** « N'installer que des versions vérifiées » (STORE-9): a version of the store without the seal is refused. */
   pluginsVerifiedOnly?: boolean;
+  /**
+   * « Mettre à jour tout seuls » (ESC-700): `never` (the default), `escouade` (`dev.escouade.*` alone) or `verified` (every
+   * plugin): the updates of the store, verified, that ask for nothing more install by themselves.
+   */
+  pluginsAutoUpdate?: PluginsAutoUpdate;
   /**
    * « Harness des plugins tiers » (SEC-01, ESC-589): `ask`, a harness a third party describes asks at its first launch,
    * its whole command said; `refuse`, none runs.
@@ -288,6 +300,8 @@ export interface SpeechSettings {
   volume: number;
   /** The silence that ends what the user says, and sends it (ms). */
   silenceMs: number;
+  /** « Sensibilité du micro » (ESC-665): -5 (less sensitive) to 5 (more); 0, the detector as it always was. */
+  sensitivity: number;
   /** « Voix générée par » (ESC-132): Piper on the machine (the default), or the service `onlineService` with the key of its dictation. */
   engine: 'local' | 'online';
   onlineService: string;
@@ -427,7 +441,10 @@ export type VoiceEvent =
   | { kind: 'convSpoken'; session: number; reading: number; error: string | null; paused: boolean }
   | { kind: 'convNotice'; session: number; message: string }
   | { kind: 'convBargeIn'; session: number; reading: number }
-  | { kind: 'convEnded'; session: number; error: string | null };
+  | { kind: 'convEnded'; session: number; error: string | null }
+  /** The tester of « Sensibilité du micro » (ESC-665): levels (RMS) only, never the sound. */
+  | { kind: 'meter'; session: number; level: number; noise: number; threshold: number; speech: boolean }
+  | { kind: 'meterEnded'; session: number; error: string | null };
 
 /** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */
 export interface Account {
@@ -994,6 +1011,10 @@ export interface Project {
   commitMode: CommitMode;
   /** « Ouvrir les pages des lancements » (ESC-311): where a launch's page opens once it answers. Kept on this machine. */
   pagesOpen?: PagesOpen;
+  /** « Page à soi » (AP-7): the .html this machine chose for show_page(template: "custom"), absolute or relative to its folder; absent: none. Kept on this machine, ahead of the file's. */
+  customPage?: string;
+  /** `pages.custom` of its .escouade.yml, once trusted: never set by the window. */
+  fileCustomPage?: string;
   /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees »: where its new worktrees go, from its folder or absolute; empty is `.claude/worktrees`. */
@@ -1186,16 +1207,174 @@ export interface PageView {
   loaded?: boolean;
   /** Its document's title, once the page gave one. */
   docTitle?: string;
+  /** The agent that opened it by `open_browser` (ESC-678): a `browser:<id>` of its own. */
+  opener?: string;
+  /** The agent that drives it (ESC-678). */
+  driver?: string;
+}
+
+/** Where an agent wants a browser it opens (`open_browser`, ESC-678). */
+export type BrowserWish = 'full' | 'beside' | 'below' | 'quiet';
+
+/** A browser an agent opened or showed again (ESC-678): its row, and where it goes (`waiting`: until the user looks at
+ * the agent's conversation). */
+export interface BrowserOpened {
+  view: PageView;
+  agent: string;
+  wish: BrowserWish;
+  place: 'full' | 'beside' | 'below' | 'waiting' | 'quiet';
+}
+
+/** An agent's request to open an address outside its project's launch (ESC-678, choice C3): the band of its conversation. */
+export interface BrowserOpenAsk {
+  id: string;
+  agent: string;
+  projectId: string;
+  /** `scheme://host[:port]`. */
+  origin: string;
+  url: string;
+  wish: BrowserWish;
+}
+
+/** Where the window shows a browser (ESC-669, `list_browsers`): alone, in a pane beside or under something else, or nowhere. */
+export type PagePlacement = 'full' | 'beside' | 'below' | 'hidden';
+
+/** An agent's leave to read an origin in one browser, or its request of it (ESC-669, outside the project's launch). */
+export interface PageConsent {
+  /** The agent's id. */
+  agent: string;
+  /** `scheme://host[:port]`. */
+  origin: string;
+}
+
+/** The band of a browser: the requests waiting for the user, the leaves given (they fall with the browser). */
+export interface PageConsents {
+  asks: PageConsent[];
+  grants: PageConsent[];
 }
 
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
+/** A gesture of an agent on a row of « Navigateurs », numbered (ESC-680): what it did, where the page was after it. */
+export interface DrivePin {
+  n: number;
+  what: string;
+  /** The page’s scroll, height and view after it, in CSS pixels. */
+  y: number;
+  height: number;
+  view: number;
+}
+
+/** The driving of a row of « Navigateurs » (`drive_browser`, ESC-679; drawn by AB-8). */
+export interface DriveView {
+  browser: string;
+  /** The agent that drives it, once it made a gesture. */
+  agent: string | null;
+  hand: 'agent' | 'user';
+  /** « Ne plus laisser piloter »: until the row closes. */
+  stopped: boolean;
+  step: number;
+  what: string;
+  /** « Continuer » waits for the user (`wait_user`). */
+  waiting: boolean;
+  /** The agents asking to fill a password (C2). */
+  passwordAsks: string[];
+  pins: DrivePin[];
+}
+
+/** What the user did with the hand of a row. */
+export type HandMove = 'take' | 'give' | 'stop' | 'continue';
+
+/** Where the page of a row is: its scroll, its height, its view (the rail of an agent’s page). */
+export interface DrivePlace {
+  y: number;
+  height: number;
+  view: number;
+}
+
 export interface PageEvent {
   /** The page's key: its agent's id, or `browser:<id>` for a browser opened alone (ESC-657). */
   agentId: string;
-  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title';
+  /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. `width`: an agent's capture shows it at the width in `url` (`full`, `tablet`, `mobile`) for its time, an empty `url` gives it back its own (ESC-670). `opens`: an
+   * agent asked to open an address, or was answered (ESC-678, keyed by the agent): the bands read them again. `closed`:
+   * its agent closed it; `undriven`: its agent no longer drives it. `mode`: its agent shows it at the width in `url`, for good
+   * (`drive_browser`, ESC-679). `drive`: its driving changed (a gesture, the hand, « Continuer »; AB-8 draws it). */
+  phase:
+    | 'started'
+    | 'finished'
+    | 'outside'
+    | 'popups'
+    | 'refused'
+    | 'responsive'
+    | 'title'
+    | 'consents'
+    | 'width'
+    | 'opens'
+    | 'closed'
+    | 'undriven'
+    | 'mode'
+    | 'drive';
   url: string;
   /** Its document's title, with `title` (cleaned by the backend). */
   title?: string;
+}
+
+/** What happened to an agent's page (ESC-667): a load, a web address it asked for (`wants`: the window offers it, opened
+ * by a gesture of the user alone), another refused, a download or a permission refused, its title as the page wrote it. */
+export interface AgentPageEvent {
+  /** Its number, `p-<n>`. */
+  page: string;
+  /** `shown`: an agent showed it or a version of it, its row opened (ESC-673); `closed`: its row closed; `erased`: no
+   * longer kept (its agent or its project gone, room made), its cards say so (AP-3); `version`: its agent showed another of its versions (`drive_browser`, ESC-679). */
+  phase:
+    | 'started'
+    | 'finished'
+    | 'wants'
+    | 'refused'
+    | 'download'
+    | 'permission'
+    | 'title'
+    | 'shown'
+    | 'closed'
+    | 'erased'
+    | 'proposed'
+    | 'version';
+  url?: string;
+  title?: string;
+}
+
+/** An agent's page as the window draws it (AP-3, `pages::PageRow`): its row of « Navigateurs », its bar, its card. */
+export interface AgentPageRow {
+  /** `p-<n>`. */
+  page: string;
+  projectId: string;
+  agentId: string;
+  /** Its agent's name when it showed the page. */
+  agentName: string;
+  ticketId: string | null;
+  title: string;
+  /** `review`, `diagram`, `compare`, `html` or `custom`. */
+  template: string;
+  /** Its versions kept, the oldest first. */
+  versions: { n: number; at: number }[];
+  /** The version its row shows: the last, unless the user went back to another. */
+  shown: number;
+  /** Its row is open in « Navigateurs ». */
+  open: boolean;
+  /** The agent asked its row to wait (`open: quiet`). */
+  quiet: boolean;
+  loaded: boolean;
+  /** The request of the box it carries (`a-<n>`, AP-4). */
+  ask?: string | null;
+  /** What the page proposed (`_/choose`, checked by the core), not sent yet: the band shows it in the request's words. */
+  proposal?: PageProposal | null;
+}
+
+/** A page's proposal (`pages::PageProposal`): options of its request, and the note it joined. */
+export interface PageProposal {
+  ask: string;
+  options: string[];
+  note: string | null;
+  at: number;
 }
 
 /** Where a page goes in the window, in its logical pixels. */
@@ -1600,6 +1779,14 @@ export interface ProjectEnvironments {
   /** The host has no deployments (Gitea, Forgejo, Azure DevOps). */
   unsupported: boolean;
   host: string;
+  /** The deployments of a commit of the agents' own branches, previews included. */
+  branches?: BranchDeployment[];
+}
+
+/** A deployment of a commit of these agents' own branches. */
+export interface BranchDeployment {
+  deployment: Deployment;
+  agents: string[];
 }
 
 export type MergeStrategy = 'merge' | 'squash' | 'rebase' | 'semiLinear';
@@ -2107,6 +2294,8 @@ export interface Agent {
   isola: boolean;
   /** How far it is through a plan (its task list, its subagents, its workflows), worked out by the backend from its stream; absent until it has any. */
   plan?: PlanState;
+  /** The skills and plugins it and its subagents used, for the « Workspace » (the backend's canvas summary); absent until it has any. */
+  canvas?: CanvasSummary;
   /** « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal, not in Escouade's conversation view. */
   terminal: boolean;
   /**
@@ -2391,6 +2580,42 @@ export interface TaskOutput {
   truncated: boolean;
   /** Where it was read: the running process, its output file (the process is gone, or the Claude Code view), or nowhere (a workflow, a remote agent, no file). */
   source: 'process' | 'file' | 'none';
+}
+
+/** A skill (a call of `Skill`) or a plugin (the server of a tool `mcp__<server>__<tool>`) a thread used. */
+export interface KitUse {
+  kind: 'skill' | 'plugin';
+  name: string;
+  calls: number;
+  /** Its calls running now. */
+  running: number;
+  /** Its first call (absent: saved before it was kept). */
+  firstAt?: number;
+  lastAt: number;
+}
+
+/** What the « Workspace » reads of an agent without its conversation: its tools, and each subagent's by its call. */
+export interface CanvasSummary {
+  tools: KitUse[];
+  /** Each subagent's tools and latest terminal calls. */
+  subs: { call: string; tools: KitUse[]; commands?: CommandRun[] }[];
+  /** The pages published with `Artifact`, by address, by any thread. */
+  artifacts?: { url: string; title: string; versions: number; at: number }[];
+  /** The publications running: their address comes with their result. */
+  publishing?: { call: string; name: string; since: number }[];
+  /** The agent's own latest terminal calls (5 at most). */
+  commands?: CommandRun[];
+}
+
+/** A terminal call (`Bash` in the foreground) of a thread: the window tells the test runs among them. */
+export interface CommandRun {
+  call: string;
+  command: string;
+  startedAt: number;
+  endedAt?: number | null;
+  failed: boolean;
+  /** Cut short by the end of the process (a restart): neither passed nor failed. */
+  stopped?: boolean;
 }
 
 /** How far an agent is through a plan: its task list, its subagents, its workflows. */
@@ -3155,6 +3380,8 @@ export type UiEvent =
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
   | { type: 'devPage'; page: PageEvent }
+  | { type: 'browserOpened'; browser: BrowserOpened }
+  | { type: 'agentPage'; page: AgentPageEvent }
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   | { type: 'focusPrs'; projectId: string }
@@ -3175,6 +3402,8 @@ export type UiEvent =
   | { type: 'targetCi'; projectId: string; ci: BranchCi | null }
   /** A plugin of the seed installed for a gesture that needs it (ESC-373): said in a line, the plugins read again. */
   | { type: 'pluginSeeded'; id: string; text: string }
+  /** Plugins updated by themselves, or one that failed (ESC-700): the plugins read again, without a word. */
+  | { type: 'pluginsAutoUpdated' }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
@@ -4656,6 +4885,8 @@ export interface WindowAsk {
   delegatedName: string | null;
   /** The agents the user may leave it to, by id and name. */
   delegates: [string, string][];
+  /** The agent's page that carries it (AP-4): « Ouvrir la page » and its thumbnail. */
+  page?: { page: string; title: string; template: string; version: number } | null;
 }
 
 /** The box as the window reads it (`asks::InboxView`). */

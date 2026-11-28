@@ -28,3 +28,11 @@ Ce qui est commun aux trois directions :
 ## Ce qui n'est pas montré
 
 Les états d'erreur (page trop lourde, modèle aux données refusées), la page à soi, le schéma et la comparaison. Ils suivent la direction choisie et viendront avec AP-3 et AP-5. La vérification par le relecteur de finition d'impeccable n'a pas tourné : le ticket demande de travailler sans sous-agents. Les deux passes de captures ont été relues ici, à 1440 et à 1024, en clair et en sombre.
+
+## Les modèles (AP-5, ESC-674)
+
+`captures/modeles/` : les modèles `review`, `diagram` et `compare` tels que la cloison les sert, en sombre (fr, page à côté de la conversation à 1440) et en clair (en, à 1024), avec des données dont chaque texte est piégé (il reste du texte). Elles viennent de l'e2e `tests/e2e/agentpage-templates.spec.ts`, qui en fait 24 (fr et en, clair et sombre, 1440 et 1024) dans `ESCOUADE_CAPTURES` quand il est donné.
+
+## La vue construite (AP-3, ESC-675)
+
+`captures/vue/` : la vraie fenêtre, webview comprise (`PrintWindow`), prise par l'e2e `tests/e2e/agent-pages-view.spec.ts` avec `ESCOUADE_E2E_SHOTS` (et `ESCOUADE_E2E_VIEWPORT` à la taille voulue) : `<état>-<langue>-<thème>-<largeur>.png`. Les états : `montree` (la revue à côté de la conversation, sa carte, sa ligne, la mention de confiance), `mise-a-jour` (v2 rechargée sur place, la carte « Mise à jour »), `version-ancienne` (retour à la v1), `mobile` (390 px), `en-attente` (un schéma montré avec `open: quiet`, sa ligne avec son point), `fermee` (fermée par l'agent : « Rouvrir »). En français et en anglais, sombre et clair, à 1440 × 900 et 1024 × 728. Le rail des repères, les rangées numérotées et la bande pilotée viennent avec AB-8, la bande du choix avec AP-4.

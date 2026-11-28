@@ -212,6 +212,8 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('remoteAll', 'agents', 'settings.claude.remoteAll', s('remoteControlAll')),
   row('remoteKeepMax', 'agents', 'settings.claude.remoteKeepMax', s('remoteKeepMax')),
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
+  row('agentBrowsers', 'agents', 'mcp.section.browsers', s('agentBrowsers')),
+  row('agentPages', 'agents', 'mcp.section.pages', s('agentPages')),
   row('agentsAnswer', 'agents', 'mcp.section.answer', s('agentsAnswer')),
   row('inbox', 'agents', 'inbox.settings.box'),
   row('inboxKeep', 'agents', 'inbox.settings.keep', s('inboxKeepDays')),
@@ -247,9 +249,10 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('overseerShortcut', 'overseer', 'overseer.settings.shortcut'),
   row('overseerDirectives', 'overseer', 'overseer.settings.groupDirectives'),
 
-  // Voix › Dictée, Conversation.
+  // Voix › Dictée, Conversation (its « Sensibilité du micro » and tester, ESC-665).
   row('dictation', 'voice', 'voice.settings.transcription', s('voice')),
   row('conversation', 'voice', 'voice.speech.title', s('voice')),
+  row('micSensitivity', 'voice', 'voice.speech.sensitivity', s('voice')),
 
   // Notifications › Me prévenir pour, Pull requests et déploiements, Canaux, Son.
   row('notifyFor', 'notifications', 'settings.notifications.notifyFor', s('notifyFor')),
@@ -261,6 +264,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('pluginsInstalled', 'plugins', 'plugins.installed.title'),
   row('pluginsSeed', 'plugins', 'plugins.installed.seedTitle'),
   row('pluginsVerifiedOnly', 'plugins', 'plugins.installed.verifiedOnly', s('pluginsVerifiedOnly')),
+  row('pluginsAutoUpdate', 'plugins', 'plugins.installed.autoUpdate', s('pluginsAutoUpdate')),
   row('thirdPartyHarnesses', 'plugins', 'plugins.installed.thirdPartyHarnesses', s('thirdPartyHarnesses')),
 
   // Avancé › Réseau, Terminaux, Pièces jointes, Recherche par le sens, Données locales.
@@ -346,6 +350,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   // Lancement.
   row('pagesOpen', 'launch', 'settings.project.pagesOpen', { project: ['pagesOpen'] }),
   row('runCommands', 'launch', 'settings.project.launch', { project: ['runCommands'] }),
+  row('customPage', 'launch', 'settings.project.customPage', { project: ['customPage'] }),
 
   // Kanban › Validation, Avant et après, Pilote auto, Agents des tickets, Workflow.
   row('action', 'board', 'boardSettings.tab.actionsTitle', { board: ['action'] }),

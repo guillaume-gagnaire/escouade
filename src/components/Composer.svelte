@@ -20,37 +20,22 @@
   import { interactiveCommands, interactiveOf, queueViewCommand, takeViewCommand, type Opens } from '../lib/interactive';
   import { canSwitchView, inHarnessView, toggleRemote } from '../lib/agent-actions';
   import { conversationOf } from '../lib/conversations.svelte';
-  import { getDraft, giveBack, setDraft } from '../lib/drafts';
-  import { hold, holdModeOf, settled } from '../lib/outbox.svelte';
+  import { getDraft, setDraft } from '../lib/drafts';
+  import { holdModeOf } from '../lib/outbox.svelte';
   import { injectedSource } from '../lib/events';
   import { parseLocalCommand } from '../lib/localcmd';
-  import { reportRefusal, sendDraft } from '../lib/send.svelte';
+  import { effortChoicesOf, modeChoicesOf, modelChoicesOf, setAgentOption } from '../lib/agent-options';
+  import { outgoing, pendingItemOf, submitDraft } from '../lib/send.svelte';
   import { fileOrigins } from '../lib/file-origin';
   import { basename, dirname, fSize } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
-  import { EFFORTS, MODES, modeLabel, modeTitle, modelOptions } from '../lib/models';
-  import {
-    can,
-    capsOf,
-    effortsOf,
-    modelCost,
-    modelMenu,
-    modelsOf,
-    modelTakes,
-    modesOf,
-    fromConfig,
-    readingModels,
-    refreshModels,
-    searchesModels,
-    setFavorite,
-    speakerOf,
-    engineName,
-  } from '../lib/engines';
+  import { EFFORTS } from '../lib/models';
+  import { can, capsOf, modelTakes, refreshModels, searchesModels, setFavorite, speakerOf, engineName } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app, atWork } from '../lib/state.svelte';
-  import type { Agent, QuestionItem } from '../lib/types';
+  import type { Agent } from '../lib/types';
   import { insertAt } from '../lib/dictation';
   import type { DictationTarget } from '../lib/dictation.svelte';
   import AttachmentChip from './AttachmentChip.svelte';
@@ -81,9 +66,6 @@
   /** `mark`: where an interactive command opens (ESC-401), said before it is pressed. */
   let suggestions = $state<{ label: string; detail: string; value: string; mark?: string }[]>([]);
   let sel = $state(0);
-  let sending = $state(false);
-  /** The agent whose message being sent the backend holds until its worktree is prepared. */
-  let heldFor: string | null = null;
   /** Files being read, not attached yet. */
   let reading = $state(0);
   /** A file is being copied: its chip is there, but its path is not known yet. */
@@ -113,7 +95,7 @@
   };
 
   const conv = $derived(conversationOf(agent.id));
-  const pendingItem = $derived(agent.pending.length ? conv.items.find((i) => i.id === agent.pending[0]) : undefined);
+  const pendingItem = $derived(pendingItemOf(agent));
   const busy = $derived(atWork(agent));
   const sendTitle = $derived.by(() => {
     const engine = speakerOf(agent.engine);
@@ -129,60 +111,10 @@
   // A harness that lists many models, or those of its providers (OpenCode): a search, the favorites first, then a group by
   // family (by provider); a favorite says its provider, out of its group.
   const manyModels = $derived(searchesModels(agent));
-  const modelChoices = $derived(
-    manyModels
-      ? modelMenu(agent).map((m) => {
-          const cost = modelCost(agent, m.id);
-          const detail =
-            (m.favorite ? m.provider : undefined) ?? cost?.label ?? (fromConfig(agent, m.id) ? t('composer.model.fromConfig') : undefined);
-          return { value: m.id, label: m.label, detail, title: cost?.title, favorite: m.favorite, group: m.group };
-        })
-      : // Claude Code's aliases (`default`, `opus`…) are read for its own agents only: Cursor's Auto is `default` too.
-        modelOptions((agent.engine ?? 'claude') === 'claude' ? app.models : [], modelsOf(agent)).map((o) => {
-          // What it costs beside the others, when its harness bills by model (Copilot: `×3`).
-          const cost = modelCost(agent, o.value);
-          if (cost) return { ...o, detail: cost.label, title: cost.title };
-          // Codex's model of its config.toml, which it does not list (ESC-186).
-          if (fromConfig(agent, o.value)) return { ...o, detail: t('composer.model.fromConfig') };
-          // Codex's stand-in while its account's list is being read (ESC-186).
-          return o.value && readingModels(agent) ? { ...o, detail: t('composer.model.reading') } : o;
-        }),
-  );
-  // A harness with no stand-in (OpenCode) while its account's list is being read: one greyed line that says so (ESC-186).
-  const modelOptionsShown = $derived(
-    modelChoices.length || !readingModels(agent) ? modelChoices : [{ value: '', label: t('composer.model.reading'), disabled: true }],
-  );
-  // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
+  const modelOptionsShown = $derived(modelChoicesOf(agent));
   const caps = $derived(capsOf(agent.engine));
-  // The five modes keep their places: one its harness lacks is greyed, with why (choice 17 of the 2.0 design).
-  const takes = $derived(new Set(modesOf(agent, MODES, agent.mode).map((m) => m.value)));
-  const modeOptions = $derived(
-    MODES.map((md) => {
-      // « Bypass » its harness has, not allowed in the settings (SEC-09).
-      if (md.value === 'bypassPermissions' && !takes.has(md.value) && caps?.modes.some((m) => m.id === md.value))
-        return { value: md.value, label: md.label, disabled: true, reason: t('composer.mode.bypassNotAllowed') };
-      if (!takes.has(md.value)) {
-        const harness = engineName(agent.engine);
-        // A harness of one mode alone runs in it, whatever is asked (ESC-489): the others say so.
-        const only = caps?.modes.length === 1 ? caps.modes[0].id : null;
-        const reason = only
-          ? t('composer.mode.only', { harness, mode: modeLabel(only) })
-          : md.value === 'auto'
-            ? t('composer.mode.missingAuto', { harness })
-            : t('composer.mode.missing', { harness, mode: md.label });
-        return { value: md.value, label: md.label, disabled: true, reason };
-      }
-      const unavailable = md.value === 'auto' && !modelTakes(agent, agent.model, 'auto');
-      const meaning = caps?.modes.find((m) => m.id === md.value)?.meaning ?? modeTitle(md.value, speakerOf(agent.engine));
-      return {
-        value: md.value,
-        label: md.label,
-        detail: unavailable ? t('composer.mode.autoUnavailableDetail') : meaning,
-        title: unavailable ? t('composer.mode.autoUnavailableTitle') : meaning,
-        disabled: unavailable,
-      };
-    }),
-  );
+  // The five modes, each with what it means there; one its harness lacks greyed, with why.
+  const modeOptions = $derived(modeChoicesOf(agent));
   // The account chip: with several accounts of the agent's harness, beside the model. It changes the account only while
   // the agent has no session (nothing said to it yet, no copy's original behind it): then its conversation is filed in that
   // account. Another harness's accounts are never offered: the agent runs on its own harness.
@@ -562,9 +494,6 @@
     }
   }
 
-  /** The send under way: a message sent before it is taken goes right after it, never dropped. */
-  let inflight: Promise<void> | null = null;
-
   async function send() {
     const body = text.trim();
     if ((!body && !files.length) || reading || copying || paused) return;
@@ -575,90 +504,10 @@
       await openInteractive(opens, body);
       return;
     }
-    // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
-    if (sending && heldFor === agent.id) {
-      app.toast(t('composer.send.alreadyWaiting'));
-      return;
-    }
-    // Text typed while Claude waits answers the question / refuses the permission.
-    const answering = body ? pendingItem : undefined;
-    const mode = answering ? null : holdModeOf(agent);
-    if (mode) {
-      hold(agent.id, body, files.slice(), mode);
-      text = '';
-      files = [];
-      return;
-    }
-    const message = { id: agent.id, conv, owner: draftFor, body, answering, prevText: text, prevFiles: files };
-    // Another one may still be on its way (its answer can show before its call returns): this one leaves the field at
-    // once, as it would, and goes right after it.
-    const before = inflight;
-    text = '';
-    if (!answering) files = [];
-    const mine = (async () => {
-      if (before) await before;
-      // Nor before a held message on its way.
-      await settled(message.id);
-      await deliver(message);
-    })();
-    inflight = mine;
-    await mine;
-    if (inflight === mine) inflight = null;
-  }
-
-  async function deliver({
-    id,
-    conv,
-    owner,
-    body,
-    answering,
-    prevText,
-    prevFiles,
-  }: {
-    id: string;
-    conv: ReturnType<typeof conversationOf>;
-    owner: string;
-    body: string;
-    answering: typeof pendingItem;
-    prevText: string;
-    prevFiles: DraftAttachment[];
-  }) {
-    sending = true;
-    const agent = app.agents[id];
-    // A new worktree is prepared first (made first, when it waits for the first message: ESC-156): the backend holds the
-    // message until then, and it shows meanwhile.
-    const unhold =
-      !answering && (agent?.setup || agent?.worktreePending)
-        ? conv.holdMessage({
-            text: body,
-            images: prevFiles.filter((f) => f.kind === 'image').length,
-            files: prevFiles.filter((f) => f.kind !== 'image').map((f) => f.name),
-          })
-        : undefined;
-    if (unhold) heldFor = id;
-    try {
-      if (answering?.kind === 'question') {
-        const q = answering as QuestionItem;
-        await api.answerQuestion(id, q.id, Object.fromEntries(q.questions.map((x) => [x.question, body])));
-      } else if (answering?.kind === 'permission') {
-        await api.answerPermission(id, answering.id, 'deny', body);
-      } else {
-        await sendDraft(id, body, prevFiles);
-      }
-      if (answering && prevFiles.length) {
-        app.toast(t('composer.send.filesKept'));
-      }
-      conv.noAccount = null;
-    } catch (e) {
-      // The files of an answer never left the field.
-      giveBack(owner, prevText, answering ? [] : prevFiles);
-      // For want of an account of its harness: said in the conversation, with the way out (choice 19).
-      reportRefusal(owner, e);
-    }
-    // Recorded by now, or given back to the field above.
-    unhold?.();
-    heldFor = null;
-    sending = false;
+    const s = submitDraft(agent, draftFor, text, files);
+    if (s.cleared !== 'none') text = '';
+    if (s.cleared === 'all') files = [];
+    await s.done;
   }
 
   function stop() {
@@ -770,12 +619,7 @@
     }
   }
 
-  function setOption(o: { model?: string; effort?: string; mode?: string }) {
-    const a = app.agents[agent.id];
-    if (a) Object.assign(a, o);
-    if (o.mode === 'bypassPermissions') app.toast(t('composer.mode.bypassToast', { engine: speakerOf(agent.engine) }), 'info');
-    app.run(api.setAgentOptions(agent.id, o));
-  }
+  const setOption = (o: { model?: string; effort?: string; mode?: string }) => setAgentOption(agent.id, o);
 </script>
 
 <div class="composer-wrap" bind:this={wrap}>
@@ -889,7 +733,7 @@
         <Dropdown
           caption={t('composer.bar.effort')}
           value={effortOk ? agent.effort : ''}
-          options={effortsOf(agent, EFFORTS).map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
+          options={effortChoicesOf(agent)}
           shownLabel={EFFORTS.find((ef) => ef.value === agent.effort)?.label}
           open={menu === 'effort'}
           showCaption={!tight}
@@ -945,7 +789,7 @@
         <button
           class="btn primary send"
           use:tip={sendTitle}
-          disabled={paused || sending || reading > 0 || copying || (!text.trim() && !files.length)}
+          disabled={paused || !!outgoing[agent.id] || reading > 0 || copying || (!text.trim() && !files.length)}
           onclick={send}
         >
           {t('composer.send.label')}{#if !cramped}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd>{/if}

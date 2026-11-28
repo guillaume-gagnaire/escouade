@@ -13,7 +13,8 @@
   import type { Project } from '../../lib/types';
   import Conversation from '../Conversation.svelte';
   import DevPage from '../DevPage.svelte';
-  import { devpages, rowName } from '../../lib/devpage.svelte';
+  import AgentPageView from '../AgentPageView.svelte';
+  import { devpages, isAgentPage, rowName } from '../../lib/devpage.svelte';
   import VscodeView from '../editor/VscodeView.svelte';
   import Icon from '../Icon.svelte';
   import RunView from '../RunView.svelte';
@@ -81,7 +82,11 @@
   {:else if cmd}
     <RunView {cmd} {project} />
   {:else if page && item.kind === 'page'}
-    <DevPage pageKey={item.id} />
+    {#if isAgentPage(item.id)}
+      <AgentPageView pageKey={item.id} />
+    {:else}
+      <DevPage pageKey={item.id} />
+    {/if}
   {:else if item.kind === 'editor'}
     <VscodeView {project} />
   {/if}

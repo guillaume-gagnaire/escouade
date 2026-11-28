@@ -81,11 +81,13 @@ pub(crate) fn runtime(name: &str) -> (Arc<Runtime>, Arc<Plugins>, DataDir) {
 }
 
 /// The harness the plugin `owner` describes by `decl`, served by the generic ACP plugin. A third party's has its command
-/// on the fake programs agreed to (SEC-01, ESC-589): its agreement is `third_party` tests'.
+/// on the fake programs agreed to (SEC-01, ESC-589): its agreement is `third_party` tests'. In the registry, as the app
+/// has it: its launch is read again against the harness the registry has now (ESC-697).
 fn described(rt: &Arc<Runtime>, owner: &str, decl: Value) -> &'static ProcessEngine {
     let decl: proto::HarnessDecl = serde_json::from_value(decl).unwrap();
     let engine: &'static ProcessEngine =
         Box::leak(Box::new(ProcessEngine::described(rt.clone(), owner, decl)));
+    crate::engine::registry::register(engine);
     for program in [fake_acp(), fake_unharnessed()] {
         if let Some(line) = engine.third_party_line(&program) {
             crate::plugins::consent::agree(&line);

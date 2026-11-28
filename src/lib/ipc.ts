@@ -26,10 +26,17 @@ import type {
   BackupDiff,
   BackupsView,
   RestoreOutcome,
+  AgentPageRow,
   CodeHost,
   MergeHow,
   EngineDecl,
   PageBounds,
+  PageConsents,
+  DriveView,
+  DrivePlace,
+  HandMove,
+  BrowserOpenAsk,
+  PagePlacement,
   PageView,
   Memory,
   VectorsModelInfo,
@@ -270,6 +277,12 @@ export const api = {
   /** Stops listening and gives the text heard (empty: nothing said). `target`: where it goes, for the usage statistics. */
   voiceStop: (session: number, target: string) => invoke<string>('voice_stop', { session, target }),
   voiceCancel: () => invoke<void>('voice_cancel'),
+  /** « Tester » of « Sensibilité du micro » (ESC-665): listens to `device`, its levels as `meter` events; nothing kept nor sent. */
+  voiceMeterStart: (device: string, sensitivity: number, silenceMs: number) =>
+    invoke<number>('voice_meter_start', { device, sensitivity, silenceMs }),
+  /** The slider moved while the tester listens. */
+  voiceMeterSet: (session: number, sensitivity: number) => invoke<void>('voice_meter_set', { session, sensitivity }),
+  voiceMeterStop: (session: number) => invoke<void>('voice_meter_stop', { session }),
   /** Its progress comes as `voice` events; resolves once the model is on the disk, its checksum checked. */
   voiceDownload: (model: string) => invoke<void>('voice_download', { model }),
   voiceDownloadCancel: (model: string) => invoke<void>('voice_download_cancel', { model }),
@@ -1067,12 +1080,56 @@ export const api = {
   /** `projectId`: the page of a launch command run in its project, keyed `run:<project>:<command>` (ESC-560). */
   devpageOpen: (agentId: string, title: string, url: string, bounds: PageBounds | null, projectId?: string) =>
     invoke<PageView>('devpage_open', { agentId, title, url, bounds, ...(projectId ? { projectId } : {}) }),
-  devpagePlace: (agentId: string, bounds: PageBounds | null) => invoke<void>('devpage_place', { agentId, bounds }),
+  /** `placement`: where the window shows it (ESC-669), for `list_browsers`. */
+  devpagePlace: (agentId: string, bounds: PageBounds | null, placement?: PagePlacement) =>
+    invoke<void>('devpage_place', { agentId, bounds, placement: placement ?? null }),
+  /** The band of the browser `agentId` (ESC-669): the agents' requests to read it, the leaves given. */
+  devpageConsents: (agentId: string) => invoke<PageConsents>('devpage_consents', { agentId }),
+  /** « Permettre » or « Refuser » in its band: told to the agent by a message. */
+  devpageConsent: (agentId: string, agent: string, origin: string, allow: boolean) =>
+    invoke<PageConsents>('devpage_consent', { agentId, agent, origin, allow }),
+  /** « Retirer les accords » of the browser `agentId`. */
+  devpageRevoke: (agentId: string) => invoke<PageConsents>('devpage_revoke', { agentId }),
+  /** The driving of the row `key` (ESC-679, drawn by AB-8): who drives, who has the hand, its gestures. */
+  browserDriveState: (key: string) => invoke<DriveView>('browser_drive_state', { key }),
+  /** « Reprendre la main », « La rendre », « Ne plus laisser piloter », « Continuer »: the core's, told to the agent. */
+  browserDriveHand: (key: string, hand: HandMove) => invoke<DriveView>('browser_drive_hand', { key, hand }),
+  /** The user's answer to an agent's request to fill a password in the row `key` (C2). */
+  browserDrivePassword: (key: string, agent: string, allow: boolean) => invoke<DriveView>('browser_drive_password', { key, agent, allow }),
+  /** Where the page of the row `key` is: its scroll, height and view (the rail of an agent's page, ESC-680). */
+  browserDrivePlace: (key: string) => invoke<DrivePlace | null>('browser_drive_place', { key }),
+  /** A pin of the rail clicked: the page goes back where its agent had put it (ESC-680). */
+  browserDriveRevisit: (key: string, n: number) => invoke<void>('browser_drive_revisit', { key, n }),
+  /** The agents whose conversation is on screen (ESC-678): an agent's browser opens beside it only then. */
+  devpageLooking: (agents: string[]) => invoke<void>('devpage_looking', { agents }),
+  devpageDismiss: (agent: string) => invoke<void>('devpage_dismiss', { agent }),
+  devpageLend: (key: string, agent: string | null) => invoke<void>('devpage_lend', { key, agent }),
+  /** The agents' requests to open an address outside their project's launch (ESC-678, C3). */
+  devpageOpenAsks: () => invoke<BrowserOpenAsk[]>('devpage_open_asks'),
+  /** « Permettre une fois » or « Refuser » of a request to open: the agent is told by a message. */
+  devpageOpenAnswer: (id: string, allow: boolean) => invoke<BrowserOpenAsk[]>('devpage_open_answer', { id, allow }),
   devpageGo: (agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) =>
     invoke<void>('devpage_go', { agentId, action, to: to ?? null }),
   devpageDevtools: (agentId: string) => invoke<void>('devpage_devtools', { agentId }),
   devpageMode: (agentId: string, mode: 'full' | 'tablet' | 'mobile') => invoke<void>('devpage_mode', { agentId, mode }),
   devpageClose: (agentId: string) => invoke<void>('devpage_close', { agentId }),
+  /** The agents' pages whose row is open, in every project (AP-3). */
+  agentpageRows: () => invoke<AgentPageRow[]>('agentpage_rows'),
+  /** An agent's page as its card and its view draw it; null once it is no longer kept. */
+  agentpageInfo: (page: string) => invoke<AgentPageRow | null>('agentpage_info', { page }),
+  /** The user opens an agent's page again (its card): its row, on its last version. */
+  agentpageReopen: (page: string) => invoke<AgentPageRow>('agentpage_reopen', { page }),
+  /** The row of an agent's page shows its version `n` (« v2 ▾ » of its bar). */
+  agentpageVersion: (page: string, n: number) => invoke<AgentPageRow>('agentpage_version', { page, n }),
+  /** The user closes the row of an agent's page (its ×): the page stays kept. Whether it was open. */
+  agentpageCloseRow: (page: string) => invoke<boolean>('agentpage_close_row', { page }),
+  /** « Annuler » of the band of the choice (AP-4): what the page proposed is let go. */
+  agentpageDropProposal: (page: string) => invoke<boolean>('agentpage_drop_proposal', { page }),
+  /** An agent's page placed at `bounds` in the window, or hidden. */
+  agentpagePlace: (page: string, bounds: PageBounds | null, placement?: PagePlacement) =>
+    invoke<void>('agentpage_place', { page, bounds, placement: placement ?? null }),
+  /** « La page veut ouvrir… »: `follow` opens the address the core kept in the system's browser. */
+  agentpageOutside: (page: string, follow: boolean) => invoke<string | null>('agentpage_outside', { page, follow }),
   /** The write's number, which the backend's log tells it by. */
   termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
   termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),

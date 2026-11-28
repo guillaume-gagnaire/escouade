@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]", "[pilote p-N]", "[pilote p-N encore]" and "[pilote p-N attends]" (its page driven by drive_browser, gesture by gesture, AB-8) (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "[artefact vN]" (version N of an artifact published at ESCOUADE_E2E_ARTIFACT_ORIGIN, AB-10), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -2183,6 +2183,165 @@ function startSession() {
     result();
   }
 
+  // ---------- "[page montre]", "[page maj p-N]", "[page ferme p-N]" (AP-3, ESC-675) ----------
+
+  // An agent's page by Escouade's tools (its --mcp-config server), as Claude Code calls them: a review shown, then a new
+  // version of it, then its row closed. The call and its answer go in the conversation, where the window draws its card.
+  function pageTurn(text) {
+    const [, what, num] = text.match(/\[page (montre|maj|ferme|calme|demande|piege)(?: (p-\d+))?\]/);
+    const criteria = [
+      { text: 'La liste montre 25 adhérents par page', state: 'met', md: 'Vérifié par `users.spec.ts`.' },
+      { text: 'Suivante et précédente au clavier', state: 'met' },
+      { text: 'La page garde le filtre et le tri après rechargement', state: what === 'maj' ? 'met' : 'partial' },
+    ];
+    const review = {
+      subject: { ticket: 'POR-41', branch: 'ticket/por-41', target: 'main', loop: '2/5' },
+      facts: { files: 3, added: 214, removed: 38, tests: { passed: 48, total: 48 } },
+      criteria,
+      changes: [
+        { path: 'src/routes/adherents/+page.svelte', added: 96, removed: 21 },
+        { path: 'src/lib/pagination.ts', added: 58, removed: 0 },
+        { path: 'tests/users.spec.ts', added: 44, removed: 9 },
+      ],
+      risks: what === 'maj' ? [] : [{ md: 'Le tri n’est pas gardé dans l’adresse.' }],
+    };
+    const tool = what === 'ferme' ? 'close_page' : 'show_page';
+    // « calme »: a diagram whose row waits (open: quiet), whatever the user looks at.
+    const diagram = {
+      title: 'Le tri gardé dans l’adresse',
+      template: 'diagram',
+      data: {
+        kind: 'mermaid',
+        source: 'flowchart LR\n  A[Liste] --> B[Tri]\n  B --> C[Adresse ?q=&tri=]',
+        md: 'Le tri suit le filtre dans l’adresse.',
+      },
+      open: 'quiet',
+    };
+    // « demande » (AP-4): the review carries its verdict, a request of the box.
+    const verdict = {
+      kind: 'choice',
+      title: 'Fusionner POR-41 ?',
+      options: [{ label: 'Fusionner dans main' }, { label: 'Renvoyer avec un mot' }, { label: 'Attendre' }],
+      recommend: { option: 'a', why: 'Les 48 tests passent.' },
+    };
+    // « piege »: a page of its own that tries to answer by itself, without a click: an option its request does not have,
+    // two for one, a field of its own, another channel, a file to join, a go-ahead, then one of its options, again and again; and a button that
+    // says « Envoyer » and « A : supprimer la branche » where the request's A is « Fusionner dans main ».
+    const trap = `<!doctype html><html><head><title>Piège</title></head><body>
+<h1>Revue</h1><p id="said">?</p>
+<button id="fake" data-option="a">A : supprimer la branche</button><button id="send">Envoyer</button>
+<script>
+const said = [];
+const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  .then((r) => said.push(path + ' ' + r.status)).catch((e) => said.push(path + ' ' + e));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+(async () => {
+  await post('_/choose', { options: ['z'] });
+  await wait(1100);
+  await post('_/choose', { options: ['a', 'b'] });
+  await wait(1100);
+  await post('_/choose', { options: ['a'], approve: true });
+  await wait(1100);
+  await post('_/answer', { options: ['a'] });
+  await post('_/file', { name: 'rapport.html', data: 'PGgxPg==' });
+  await post('_/approve', { yes: true });
+  await wait(1100);
+  await post('_/choose', { options: ['a'], files: [{ name: 'rapport.html', data: 'PGgxPg==' }] });
+  await wait(1100);
+  await post('_/choose', { yes: true });
+  await post('_/choose?send=1', { options: ['a'], note: 'envoie' });
+  for (let i = 0; i < 6; i++) {
+    await wait(1100);
+    await post('_/choose', { options: ['a'] });
+    document.getElementById('send').click();
+  }
+  document.getElementById('said').textContent = 'fini ' + said.join(' | ');
+})();
+</script></body></html>`;
+    const input =
+      what === 'ferme'
+        ? { page: num ?? 'p-1' }
+        : what === 'calme'
+          ? diagram
+          : what === 'piege'
+            ? { title: 'Une revue', template: 'html', html: trap, ask: verdict }
+            : {
+                title: 'Revue avant fusion · POR-41',
+                template: 'review',
+                data: review,
+                ...(what === 'maj' ? { page: num ?? 'p-1' } : {}),
+                ...(what === 'demande' ? { ask: verdict } : {}),
+              };
+    const call = `toolu_p${msg}`;
+    assistant({ type: 'tool_use', id: call, name: `mcp__escouade__${tool}`, input });
+    escouadeTool(tool, input)
+      .then((r) => {
+        toolResult(call, r.content[0].text);
+        const said = {
+          montre: 'Voici la revue de POR-41, je te l’ouvre à côté.',
+          maj: 'J’ai gardé le tri dans l’adresse : la revue est à jour.',
+          ferme: 'Je ferme la revue ; elle reste gardée.',
+          calme: 'Je t’ai laissé le schéma du tri dans Navigateurs, à ouvrir quand tu veux.',
+          demande: 'Voici la revue de POR-41 : choisis ton verdict dans la page.',
+          piege: 'Voici une revue.',
+        }[what];
+        streamText(said);
+        result();
+      })
+      .catch((e) => {
+        out({
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: call, content: e.message, is_error: true }] },
+          parent_tool_use_id: null,
+        });
+        streamText(`${tool} a échoué : ${e.message}`);
+        result();
+      });
+  }
+
+  // ---------- "[pilote p-N]", "[pilote p-N encore]" (AB-8, ESC-680) ----------
+
+  // The agent drives its page by Escouade's drive_browser, as Claude Code calls it: each gesture a call in the
+  // conversation (its numbered row), its answer or its refusal (the user took the hand) as the server gives it.
+  async function driveTurn(text) {
+    const [, page, again] = text.match(/\[pilote (p-\d+)( encore| attends)?\]/);
+    const browser = `page:${page}`;
+    const gestures = again
+      ? [{ browser, action: 'scroll', by: 300, ...(again === ' attends' ? { wait_user: true } : {}) }]
+      : [
+          { browser, action: 'scroll_to', target: 'criteria' },
+          { browser, action: 'highlight', target: 'criteria.2', label: 'Critère 3' },
+          { browser, action: 'scroll_to', target: 'changes' },
+        ];
+    let refused = false;
+    for (const [i, input] of gestures.entries()) {
+      const call = `toolu_d${msg}_${i}`;
+      assistant({ type: 'tool_use', id: call, name: 'mcp__escouade__drive_browser', input });
+      try {
+        const r = await escouadeTool('drive_browser', input);
+        toolResult(call, r.content.map((c) => c.text ?? '').join('\n'));
+      } catch (e) {
+        refused = true;
+        out({
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: call, content: e.message, is_error: true }] },
+          parent_tool_use_id: null,
+        });
+        break;
+      }
+    }
+    streamText(
+      refused
+        ? 'Tu as repris la main : j’attends que tu me la rendes.'
+        : again === ' attends'
+          ? 'Merci d’avoir regardé, je continue.'
+          : again
+            ? 'Je continue la visite.'
+            : 'Les deux premiers critères passent. Le troisième, à moitié : le filtre est gardé dans l’adresse, pas le tri.',
+    );
+    result();
+  }
+
   function toolResult(toolUseId, content, extra = {}) {
     out({
       type: 'user',
@@ -3595,6 +3754,30 @@ function startSession() {
           ],
         },
       });
+      return;
+    }
+    if (/\[page (montre|maj|ferme|calme|demande|piege)( p-\d+)?\]/.test(text)) {
+      pageTurn(text);
+      return;
+    }
+    if (/\[pilote p-\d+( encore| attends)?\]/.test(text)) {
+      void driveTurn(text);
+      return;
+    }
+    const artifactVersion = /\[artefact v(\d+)\]/.exec(text);
+    if (artifactVersion && process.env.ESCOUADE_E2E_ARTIFACT_ORIGIN) {
+      // Version N of an artifact (AB-10), published at the local server of the test (ESCOUADE_E2E_ARTIFACT_ORIGIN, read
+      // by a debug build alone) as Claude Code 2.1.319 words it: the app reloads the tab the agent opened on it.
+      const url = `${process.env.ESCOUADE_E2E_ARTIFACT_ORIGIN}/code/artifact/plan-24`;
+      const call = `toolu_v${msg}`;
+      const file = path.join(os.tmpdir(), 'scratchpad', 'plan.html');
+      assistant({ type: 'tool_use', id: call, name: 'Artifact', input: { file_path: file, title: 'Plan de la 2.4' } });
+      toolResult(
+        call,
+        `Published ${file} at ${url} (Version ${artifactVersion[1]}, version id 1794233240-${artifactVersion[1]}) Icon: "page".`,
+      );
+      streamText(`Version ${artifactVersion[1]} publiée.`);
+      result();
       return;
     }
     if (text.includes('[artefact]')) {

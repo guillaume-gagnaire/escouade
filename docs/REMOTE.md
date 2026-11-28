@@ -455,6 +455,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `plugin_set_secret`
 - `plugin_set_setting`
 - `plugin_start`
+- `plugins_auto_failed`
 - `plugins_check_updates`
 - `plugins_list`
 - `pr_candidates`
@@ -675,6 +676,14 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 
 Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 
+- `agentpage_capture` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `agentpage_click` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `agentpage_close` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `agentpage_open_trap` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `agentpage_outside` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `agentpage_read` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `agentpage_view` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
+- `browser_drive_state` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
 - `conversation_end` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `conversation_hold` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `conversation_listen` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
@@ -683,8 +692,11 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `conversation_stop` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `deep_links_take` : la fenêtre du poste : ses liens, son état, sa fin
 - `devpage_close` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_consents` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
 - `devpage_devtools` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_dismiss` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
 - `devpage_go` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_looking` : les navigateurs et les pages des agents, des WebViews du poste (ESC-669 à ESC-685)
 - `devpage_mode` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
 - `devpage_open` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
 - `devpage_place` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
@@ -741,6 +753,9 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `voice_download` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `voice_download_cancel` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `voice_info` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_meter_set` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_meter_start` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_meter_stop` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `voice_mistral_key` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `voice_online_catalog` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `voice_online_key_delete` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
@@ -788,8 +803,25 @@ Elles changent de machine en mode serveur (table « Ce qui change de machine »)
 Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-served-yet`, pour le ticket du mode serveur.
 
 - `agent_local_open` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
+- `agentpage_close_row` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_drop_proposal` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_info` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_open_template` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_place` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_reopen` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_rows` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `agentpage_version` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
 - `attach_origin` : l’origine d’un fichier déposé sur le poste (Windows) : lue par le client et envoyée en mode serveur
+- `browser_drive_hand` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `browser_drive_password` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `browser_drive_place` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `browser_drive_revisit` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
 - `clipboard_image` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
+- `devpage_consent` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `devpage_lend` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `devpage_open_answer` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `devpage_open_asks` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
+- `devpage_revoke` : une page d’agent ou un navigateur du poste et l’état du cœur qui le pilote : à faire avec le mode serveur des navigateurs
 - `file_origin` : l’origine d’un fichier déposé sur le poste (Windows) : lue par le client et envoyée en mode serveur
 - `fs_reveal` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
 - `inbox_open_file` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur (`inbox_file_bytes` le sert déjà)

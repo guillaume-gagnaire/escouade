@@ -297,10 +297,10 @@ test('git beside the conversation looks as the preview draws it, in both themes,
           await preview.screenshot({ path: path.join(SHOTS, `${n}.preview.png`) });
         }
 
-        // « PR et CI »: in the strip, gone under 420 px for the × (choice 189). The tab is the PR's own view since
-        // ESC-305, no longer the preview's placeholder (`#hosts`, its « dans la 2.1 » and its `.later`): not compared.
+        // « PR et CI »: in the strip at every width since the Workflow tab left (ESC-689). The tab is the PR's own view
+        // since ESC-305, no longer the preview's placeholder (`#hosts`, its « dans la 2.1 » and its `.later`): not compared.
         const hosts = side.getByRole('tab', { name: /^PR et CI/ });
-        expect.soft(await hosts.isVisible(), `« PR et CI » in the strip, ${where}`).toBe(size.width > 1100);
+        expect.soft(await hosts.isVisible(), `« PR et CI » in the strip, ${where}`).toBe(true);
       }
   } finally {
     await browser.close();

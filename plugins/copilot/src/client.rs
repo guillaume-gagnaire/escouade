@@ -1,4 +1,4 @@
-//! The client of `copilot --server --stdio`, over the protocol of its SDK (JSON-RPC 2.0, protocol 3, docs/PROTOCOL.md,
+//! The client of `copilot --server --stdio`, over the protocol of its SDK (JSON-RPC 2.0, protocols 3 and 4, docs/PROTOCOL.md,
 //! « Copilot SDK »; neither the SDK's crate nor ACP, chosen by the user on 2026-10-18). It holds no process: the core
 //! launches Copilot from `Agent::launch`, frames its messages (`framing` of the manifest: `Content-Length` headers) and
 //! hands them here; `Agent` is a state machine that answers the items of the conversation and the messages to write
@@ -149,6 +149,9 @@ pub struct Agent {
     how: &'static str,
     /// The answer to `models.list`.
     listed: Option<Value>,
+    /// The protocol its server answered `connect` with (`words::PROTOCOLS`): the shape of `session.create` and
+    /// `session.resume` follows it.
+    protocol: u64,
     next: u64,
     ours: HashMap<u64, Ours>,
     /// A message sent, its turn not over (`session.idle` not come): the next one goes in at once.
@@ -194,6 +197,7 @@ impl Agent {
             auth_type: Value::Null,
             how: "new",
             listed: None,
+            protocol: words::PROTOCOL,
             // Its ids are told apart from those of a process of this plugin before it restarted.
             next: escouade_plugin_protocol::turn::instance_id() << 20,
             ours: HashMap::new(),
@@ -444,24 +448,49 @@ impl Agent {
         out.push(Item::Stop { reason });
     }
 
-    /// What `session.create` and `session.resume` are given.
+    /// What `session.create` and `session.resume` are given. Protocol 4 (SDK v2, docs/PROTOCOL.md) nests the options
+    /// (`events.streaming`, `permissions.request`, `interaction.request…`, `mcp.envValueMode`,
+    /// `inference.reasoningEffort`); `clientName`, `workingDirectory`, `model` and `systemMessage` stay at the root.
+    /// Protocol 3 takes them flat.
     fn session_params(&self) -> Value {
-        let mut p = json!({
-            "clientName": "escouade",
-            "workingDirectory": self.cwd,
-            "streaming": true,
-            "requestPermission": true,
-            "requestUserInput": true,
-            "requestElicitation": true,
-            "requestExitPlanMode": true,
-            "envValueMode": "direct",
-        });
+        let effort =
+            (!self.effort.is_empty() && takes_effort(&self.model)).then(|| self.effort.clone());
+        let mut p = if self.protocol >= 4 {
+            let mut p = json!({
+                "clientName": "escouade",
+                "workingDirectory": self.cwd,
+                "events": { "streaming": true },
+                "permissions": { "request": true },
+                "interaction": {
+                    "requestUserInput": true,
+                    "requestElicitation": true,
+                    "requestExitPlanMode": true,
+                },
+                "mcp": { "envValueMode": "direct" },
+            });
+            if let Some(e) = &effort {
+                p["inference"] = json!({ "reasoningEffort": e });
+            }
+            p
+        } else {
+            let mut p = json!({
+                "clientName": "escouade",
+                "workingDirectory": self.cwd,
+                "streaming": true,
+                "requestPermission": true,
+                "requestUserInput": true,
+                "requestElicitation": true,
+                "requestExitPlanMode": true,
+                "envValueMode": "direct",
+            });
+            if let Some(e) = &effort {
+                p["reasoningEffort"] = json!(e);
+            }
+            p
+        };
         // Never `auto`: it picks a model itself (docs/TODO-1.8.md, point 0).
         if !self.model.is_empty() {
             p["model"] = json!(self.model);
-        }
-        if !self.effort.is_empty() && takes_effort(&self.model) {
-            p["reasoningEffort"] = json!(self.effort);
         }
         if let Some(i) = &self.instructions {
             p["systemMessage"] = json!({ "mode": "append", "content": i });
@@ -586,9 +615,12 @@ impl Agent {
                 if let Some(e) = error {
                     return self.refuse(words::session_refused(&self.lang, &e), out);
                 }
-                if r["protocolVersion"].as_u64() != Some(words::PROTOCOL) {
-                    let why = words::protocol_refused(&self.lang, &r["protocolVersion"]);
-                    return self.refuse(why, out);
+                match r["protocolVersion"].as_u64() {
+                    Some(v) if words::PROTOCOLS.contains(&v) => self.protocol = v,
+                    _ => {
+                        let why = words::protocol_refused(&self.lang, &r["protocolVersion"]);
+                        return self.refuse(why, out);
+                    }
                 }
                 // Never a token: `auth.getStatus` tells how it is signed in, no more.
                 let line = self.request("auth.getStatus", json!({}), Ours::Auth);

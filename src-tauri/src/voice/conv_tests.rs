@@ -37,6 +37,7 @@ fn conv_choice() -> ConvChoice {
         speak: SpeakOptions::default(),
         volume: 1.0,
         silence_ms: 600,
+        sensitivity: 0,
         online: None,
         online_error: None,
         online_notice: None,
@@ -309,9 +310,12 @@ fn a_voice_is_downloaded_with_its_size_and_checksum_checked() {
         assert_eq!(*seen.last().unwrap(), info.onnx_size + info.json_size);
         let asked = asked.lock().clone();
         assert!(
-            asked.iter().any(|l| l.contains("/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx ")),
+            asked.iter().any(|l| l.contains(&format!("/rhasspy/piper-voices/resolve/{}/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx ", info.revision))),
             "{asked:?}"
         );
+        // Pinned to its commit (ESC-664), never `main`, where a voice retrained upstream changes its files.
+        assert_eq!(info.revision.len(), 40);
+        assert!(!asked.iter().any(|l| l.contains("/resolve/main/")), "{asked:?}");
         // Bytes that are not the voice: not kept.
         store.delete(&info.id).unwrap();
         let mut wrong = info.clone();

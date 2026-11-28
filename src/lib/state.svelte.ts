@@ -26,7 +26,10 @@ import { shownAgents, sidebarItems, type SidebarItem } from './sidebar';
 import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { overseerVoice } from './overseer-voice.svelte';
+import { micMeter } from './mic-meter.svelte';
 import { mcp } from './mcp.svelte';
+import { plugins } from './plugins-view.svelte';
+import { storeApi, type DeepLink } from './store';
 import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf, missingAccountProjectOf, notOpened } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
@@ -89,6 +92,8 @@ import type {
   HarnessScope,
   LaunchHeld,
   PageEvent,
+  AgentPageEvent,
+  BrowserOpened,
   AgentReview,
   Project,
   ProjectEnvironments,
@@ -472,8 +477,8 @@ class AppState {
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
-  /** Tab of the side panel: uncommitted files, the repository history or the project's workflow (ESC-194). */
-  panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
+  /** Tab of the side panel: uncommitted files, the repository history, the pull request with its CI (the workflows are in the « Workspace », ESC-689). */
+  panelTab = $state<'files' | 'history' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
   composerPut = $state<{ agentId: string; text: string; replace?: boolean } | null>(null);
   /** How many messages went back to each agent's draft (`giveBack`): its composer reads the draft again. */
@@ -574,6 +579,15 @@ class AppState {
   docs = $state<Record<string, boolean>>({});
   /** Projects whose « Pull requests » view (ESC-65) fills the main area, in place of the agents (not saved). */
   prs = $state<Record<string, boolean>>({});
+  /** Projects whose « Workspace » (the canvas of the agents) fills the main area, in place of the other views (not saved). */
+  workspace = $state<Record<string, boolean>>({});
+  /** « Vue d’ensemble » shows the « Workspace » of every project in place of its list (not saved). */
+  overviewCanvas = $state(false);
+  /**
+   * The diagram of a workflow open over the « Workspace » (ESC-689): from an agent's card, with its path; from
+   * « Workflows » of the floating bar, without an agent (`agentId` null). Gone with the canvas.
+   */
+  workflowDiagram = $state<{ projectId: string; workflow: string; agentId: string | null } | null>(null);
   /** The reviews written by an agent (ESC-66), by project then by pull request. */
   prReviews = $state<Record<string, Record<number, AgentReview>>>({});
   /** The pull request whose view (ESC-457) fills the « Pull requests » view, by project: its number, its repository when
@@ -642,18 +656,46 @@ class AppState {
       part,
     );
   }
-  /** The board of the project on screen is shown: never while the Kanban is off (F-1), nor its project's (ESC-658). */
+  /**
+   * The board of the project on screen is shown: never while the Kanban is off (F-1), nor its project's (ESC-658), nor
+   * under its « Workspace ».
+   */
   boardOn = $derived(
-    this.ui.view === 'project' && !!this.project && !!this.board[this.project.id] && this.partOn(this.project.id, 'kanban'),
+    this.ui.view === 'project' &&
+      !!this.project &&
+      !!this.board[this.project.id] &&
+      !this.workspace[this.project.id] &&
+      this.partOn(this.project.id, 'kanban'),
   );
   /** The Docs tab of the project on screen is shown (ESC-258): never while the Docs space is off (F-1), nor its project's. */
   docsOn = $derived(
-    this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.boardOn && this.partOn(this.project.id, 'docs'),
+    this.ui.view === 'project' &&
+      !!this.project &&
+      !!this.docs[this.project.id] &&
+      !this.boardOn &&
+      !this.workspace[this.project.id] &&
+      this.partOn(this.project.id, 'docs'),
   );
   /** The « Pull requests » view of the project on screen is shown (ESC-65). */
-  prsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.prs[this.project.id] && !this.boardOn && !this.docsOn);
+  prsOn = $derived(
+    this.ui.view === 'project' &&
+      !!this.project &&
+      !!this.prs[this.project.id] &&
+      !this.boardOn &&
+      !this.docsOn &&
+      !this.workspace[this.project.id],
+  );
+  /** The « Workspace » of the project on screen is shown: the canvas of its agents. */
+  workspaceOn = $derived(this.ui.view === 'project' && !!this.project && !!this.workspace[this.project.id]);
+  /** The « Workspace » of every project is shown, over « Vue d’ensemble ». */
+  overviewCanvasOn = $derived(this.ui.view === 'overview' && this.overviewCanvas);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
-  editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on) && this.feature('editor'));
+  editorOn = $derived(
+    this.ui.view === 'project' &&
+      !!(this.project && this.editor[this.project.id]?.on) &&
+      !this.workspace[this.project.id] &&
+      this.feature('editor'),
+  );
   split = $derived(this.ui.layout === 'split');
   /** Estimated cost of the turns running now (their exact cost joins `usage.todayCost` at their end). */
   liveCost = $derived(Object.values(this.agents).reduce((sum, a) => sum + (a.liveCost ?? 0), 0));
@@ -736,11 +778,11 @@ class AppState {
     return p && raw ? prunePanes(raw, (x) => this.paneExists(p, x)) : null;
   });
   /** The panes are on screen: the Kanban, the pull requests and the Docs cover them (they come back when those close). */
-  panesOn = $derived(this.ui.view === 'project' && !!this.panes && !this.boardOn && !this.docsOn && !this.prsOn);
+  panesOn = $derived(this.ui.view === 'project' && !!this.panes && !this.boardOn && !this.docsOn && !this.prsOn && !this.workspaceOn);
   /** The content shown alone in the work area, which a content dropped beside it splits (null: none, or a wide view). */
   singleItem = $derived.by((): PaneItem | null => {
     const p = this.project;
-    if (!p || this.ui.view !== 'project' || this.panesOn || this.boardOn || this.docsOn || this.prsOn) return null;
+    if (!p || this.ui.view !== 'project' || this.panesOn || this.boardOn || this.docsOn || this.prsOn || this.workspaceOn) return null;
     if (this.editorOn) return { kind: 'editor' };
     if (this.runCommand) return { kind: 'launch', id: this.selectedLaunch[p.id]! };
     if (this.term) return { kind: 'term', id: this.term.id };
@@ -750,8 +792,12 @@ class AppState {
   });
   /** The editor is the content that has the keyboard: alone on screen, or in the active pane. */
   editorActive = $derived(this.panesOn ? this.panes?.active === 'editor' : this.editorOn);
-  /** The keys that answer a request go to `agentId`'s: shown alone, or in the active pane. */
+  /**
+   * The keys that answer a request go to `agentId`'s: shown alone, or in the active pane. On the « Workspace », to none:
+   * several cards may wait at once, one answers them by a click or by Tab.
+   */
   keysFor(agentId: string): boolean {
+    if (this.workspaceOn || this.overviewCanvasOn) return false;
     return !this.panesOn || this.panes?.active === `agent:${agentId}`;
   }
   /** The agents on screen: the one shown alone, or those of the panes. */
@@ -766,7 +812,14 @@ class AppState {
       ? this.panes.active.startsWith('agent:')
         ? (this.agents[this.panes.active.slice(6)] ?? null)
         : null
-      : this.ui.view === 'project' && !this.term && !this.pageShown && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn
+      : this.ui.view === 'project' &&
+          !this.term &&
+          !this.pageShown &&
+          !this.runCommand &&
+          !this.editorOn &&
+          !this.boardOn &&
+          !this.prsOn &&
+          !this.workspaceOn
         ? this.agent
         : null,
   );
@@ -779,6 +832,9 @@ class AppState {
   private ticketDoneHooks = new Set<(agentId: string) => void>();
   /** What follows a launch's page (ESC-311): its loads, its links opened outside. */
   private devPageHooks = new Set<(e: PageEvent) => void>();
+  private agentPageHooks = new Set<(e: AgentPageEvent) => void>();
+  /** What follows a browser an agent opened (ESC-678). */
+  private browserOpenedHooks = new Set<(e: BrowserOpened) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
   private turnEndHooks = new Set<(agentId: string) => void>();
@@ -801,10 +857,22 @@ class AppState {
     return () => void this.recipeHooks.delete(f);
   }
 
+  /** `f` runs at each event of an agent's page (AP-3). Returns what unregisters it. */
+  onAgentPage(f: (e: AgentPageEvent) => void) {
+    this.agentPageHooks.add(f);
+    return () => void this.agentPageHooks.delete(f);
+  }
+
   /** `f` runs at each event of a launch's page (ESC-311). Returns what unregisters it. */
   onDevPage(f: (e: PageEvent) => void) {
     this.devPageHooks.add(f);
     return () => void this.devPageHooks.delete(f);
+  }
+
+  /** `f` runs when an agent opened a browser, or showed one again (ESC-678). Returns what unregisters it. */
+  onBrowserOpened(f: (e: BrowserOpened) => void) {
+    this.browserOpenedHooks.add(f);
+    return () => void this.browserOpenedHooks.delete(f);
   }
 
   /** `f` runs, with its agent, when a ticket goes "Terminé". Returns what unregisters it. */
@@ -1134,6 +1202,12 @@ class AppState {
       case 'devPage':
         for (const f of this.devPageHooks) f(e.page);
         break;
+      case 'agentPage':
+        for (const f of this.agentPageHooks) f(e.page);
+        break;
+      case 'browserOpened':
+        for (const f of this.browserOpenedHooks) f(e.browser);
+        break;
       case 'openUrl':
         // The page a pull request needs (a compare page to finish it): a failure is told, not lost.
         this.run(openUrl(e.url));
@@ -1159,6 +1233,10 @@ class AppState {
         break;
       case 'pluginSeeded':
         this.toast(e.text, 'ok');
+        this.pluginsSeeded++;
+        break;
+      case 'pluginsAutoUpdated':
+        // Said on the page Mises à jour and the tab Versions, not in a toast (ESC-700).
         this.pluginsSeeded++;
         break;
       case 'toast':
@@ -1194,6 +1272,7 @@ class AppState {
         dictation.take(e.voice);
         conversation.take(e.voice);
         overseerVoice.take(e.voice);
+        micMeter.take(e.voice);
         break;
       case 'docsShare':
         this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };
@@ -1468,7 +1547,21 @@ class AppState {
     if (this.ui.view === 'overview') return;
     this.overviewFrom = this.ui.view;
     this.ui.view = 'overview';
+    // Opened again, it shows its list: its canvas was left with it.
+    this.overviewCanvas = false;
     this.persistUi();
+  }
+
+  /** Shows the « Workspace » of every project over « Vue d’ensemble ». */
+  openOverviewCanvas() {
+    this.openOverview();
+    this.overviewCanvas = true;
+  }
+
+  /** Back from the canvas of every project to the list of « Vue d’ensemble ». */
+  closeOverviewCanvas() {
+    this.overviewCanvas = false;
+    this.workflowDiagram = null;
   }
 
   /** Goes back from « Vue d’ensemble » to the view it covered. */
@@ -1618,6 +1711,7 @@ class AppState {
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
     this.docs[a.projectId] = false;
+    this.workspace[a.projectId] = false;
     this.prs[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
@@ -1639,6 +1733,7 @@ class AppState {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.workspace[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'term', id });
@@ -1654,6 +1749,7 @@ class AppState {
       this.selectedPage[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.workspace[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'launch', id: commandId });
@@ -1670,6 +1766,7 @@ class AppState {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.workspace[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'page', id: key });
@@ -1908,6 +2005,7 @@ class AppState {
     this.board[projectId] = true;
     this.docs[projectId] = false;
     this.prs[projectId] = false;
+    this.workspace[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
@@ -1917,6 +2015,32 @@ class AppState {
 
   closeBoard(projectId = this.ui.activeProject) {
     if (projectId) this.board[projectId] = false;
+  }
+
+  /**
+   * Shows the « Workspace » of a project: the canvas of its agents, over every other view of its main area (they all give
+   * way to it), which it leaves as they were: « Quitter » goes back to the view under it.
+   */
+  openWorkspace(projectId = this.ui.activeProject) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.workspace[projectId] = true;
+    this.persistUi();
+  }
+
+  closeWorkspace(projectId = this.ui.activeProject) {
+    if (projectId) this.workspace[projectId] = false;
+    this.workflowDiagram = null;
+  }
+
+  /**
+   * The diagram of a project's workflow, enlarged over its « Workspace » (ESC-689), opened first when another view is
+   * on screen (a divider of the conversation): with `agentId`'s path, or from a door to choose without one.
+   */
+  openWorkflowDiagram(projectId: string, workflow: string, agentId: string | null = null) {
+    if (!this.overviewCanvasOn && !(this.workspaceOn && this.project?.id === projectId)) this.openWorkspace(projectId);
+    this.workflowDiagram = { projectId, workflow, agentId };
   }
 
   /**
@@ -1930,6 +2054,7 @@ class AppState {
     this.board[projectId] = false;
     this.docs[projectId] = true;
     this.prs[projectId] = false;
+    this.workspace[projectId] = false;
     if (space) this.docsSpace[projectId] = space;
     if (page !== undefined) this.docsPage[projectId] = page;
     // A space chosen: the discussion open leaves the main area.
@@ -1971,6 +2096,7 @@ class AppState {
     this.board[projectId] = false;
     this.docs[projectId] = false;
     this.prs[projectId] = true;
+    this.workspace[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
@@ -2153,6 +2279,7 @@ class AppState {
     this.board[projectId] = false;
     this.docs[projectId] = false;
     this.prs[projectId] = false;
+    this.workspace[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
@@ -2504,6 +2631,46 @@ class AppState {
     this.toasts.push(action ? { id, text, kind, action } : { id, text, kind });
     // One with a button stays long enough to reach it.
     setTimeout(() => this.dismissToast(id), ms ?? (action ? 12_000 : kind === 'error' ? 7000 : 3500));
+  }
+
+  /**
+   * The links `escouade://` not yet taken: a plugin's page opened in the view Plugins (STORE-11), an agent's conversation
+   * shown with its composer focused (PR #47), a link the app cannot read said; the last one wins. Navigation only: any page
+   * or app may open such a link, so it never installs, sends, answers, starts nor stops anything.
+   */
+  async takeLinks() {
+    let links: DeepLink[] = [];
+    try {
+      links = (await storeApi.deepLinks()) ?? [];
+    } catch {
+      return;
+    }
+    for (const link of links) {
+      if (link.kind === 'plugin') {
+        this.openPlugins();
+        plugins.openStorePlugin(link.id);
+      } else if (link.kind === 'agent') {
+        const a = this.agents[link.id];
+        if (!a) {
+          this.toast(t('nav.deepLink.agentUnknown', { id: link.id }), 'error');
+          continue;
+        }
+        this.selectAgent(a.id);
+        this.closeEditor(a.projectId);
+        // `show_main` asked the system for the focus; a field focused before the window has it may not take the keys
+        // (macOS): focused again once the window has it, if that comes soon.
+        if (!document.hasFocus()) {
+          const again = () => this.focusComposer++;
+          window.addEventListener('focus', again, { once: true });
+          setTimeout(() => window.removeEventListener('focus', again), 3000);
+        }
+      } else if (link.kind === 'overseer') {
+        overseer.open = true;
+      } else if (link.kind === 'teamJoin') {
+        // Joining stays the user's gesture: the link is shown with its server and the team's six words.
+        this.modal = { kind: 'team', step: 'join', link: link.link };
+      } else this.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
+    }
   }
 
   /** The deletion the agent that made `a` asks for, with that agent's name; none once that agent is gone (ESC-511). */

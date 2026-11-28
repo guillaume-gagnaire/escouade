@@ -171,8 +171,17 @@ async fn a_third_party_harness_asks_at_its_first_launch_then_starts_and_asks_no_
     assert!(h.alive(&second));
 }
 
+/// Stops the process of the agent `id`, as it runs.
+fn stop(h: &Harness, id: &str) {
+    if let Some(proc) = h.core.agent(id).unwrap().lock().detach() {
+        proc.kill();
+    }
+}
+
 /// An update of the plugin that changes its harness's line (an argument added) asks again; refused, nothing is kept and
-/// the conversation says the agent does not start.
+/// the conversation says the agent does not start. An agent alive at the update keeps its process, on the line it was
+/// started on, until it stops: its next start asks (ESC-697). The warm-up « Autoriser » starts is waited for, and its
+/// process stopped after the update: nothing here depends on when the warm-up comes.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_line_changed_by_an_update_asks_again_and_a_refusal_is_said() {
     let h = harness("sec01-update");
@@ -187,6 +196,9 @@ async fn a_line_changed_by_an_update_asks_again_and_a_refusal_is_said() {
         h.core.launch_ask(engine, Some(&id)).unwrap().unwrap().held,
         None
     );
+    // The warm-up « Autoriser » starts, waited for: alive, by it or by this start, whichever takes the lock first.
+    h.core.ensure_process(&id).await.unwrap();
+    assert!(h.alive(&id));
     // The update: a new version whose line says one more argument.
     install_fake_acp(&h, "sec01-update-v2", |m| {
         m["version"] = json!("1.1.0");
@@ -196,6 +208,11 @@ async fn a_line_changed_by_an_update_asks_again_and_a_refusal_is_said() {
     assert_ne!(next.line.fingerprint, first.line.fingerprint);
     assert_eq!(next.line.args, ["acp", "--plus"]);
     assert_eq!(next.held, Some(LaunchHeld::Asks));
+    // Alive at the update: its process is not stopped by it, and a start finds it running.
+    assert!(h.alive(&id));
+    h.core.ensure_process(&id).await.unwrap();
+    // Stopped, it does not start again on the new line without the user's agreement.
+    stop(&h, &id);
     let refused = refusal_of(&h, &id).await;
     assert!(refused.contains("attend ton accord"), "{refused}");
     // Refused by the user: nothing kept, said in its conversation, and it still does not start.
@@ -215,6 +232,63 @@ async fn a_line_changed_by_an_update_asks_again_and_a_refusal_is_said() {
     );
     assert!(h.core.ensure_process(&id).await.is_err());
     assert!(!h.alive(&id));
+}
+
+/// The race of ESC-697: a start begun before an update of the plugin holds the harness it found then, whose line (the
+/// old one) stays among those kept. Ended after the update, it does not run that line: the line of the plugin installed
+/// now is read again as its program is about to run, and a line changed asks the user's agreement again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_start_begun_before_an_update_does_not_run_the_old_line_after_it() {
+    let h = harness("sec01-race");
+    let engine = install_fake_acp(&h, "sec01-race-v1", |_| {});
+    let (p, _) = h.project(false).await;
+    let id = agent_on(&h, &p.id, engine).await;
+    let first = h.core.launch_ask(engine, Some(&id)).unwrap().unwrap();
+    h.core
+        .agree_to_harness(engine, Some(&id), &first.line.fingerprint, true)
+        .unwrap();
+    // Its warm-up out of the way: started, then stopped.
+    h.core.ensure_process(&id).await.unwrap();
+    stop(&h, &id);
+    // The start begun before the update: the harness of then, its account's program.
+    let before = crate::engine::by_id(engine);
+    let settings = h.core.settings.read().clone();
+    let account = settings
+        .accounts
+        .iter()
+        .find(|a| a.engine == engine)
+        .unwrap()
+        .clone();
+    let program = crate::accounts::program(&account, &settings).unwrap();
+    let meta = h.core.agent(&id).unwrap().lock().meta.clone();
+    // The update meanwhile, its line changed.
+    install_fake_acp(&h, "sec01-race-v2", |m| {
+        m["version"] = json!("1.1.0");
+        m["contributes"]["harnesses"][0]["acp"]["args"] = json!(["acp", "--plus"]);
+    });
+    assert!(!std::ptr::addr_eq(before, crate::engine::by_id(engine)));
+    // The start ends after it.
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let spawn = crate::engine::Spawn::of(&meta, program, crate::accounts::launch_env(&account));
+    let proc = before
+        .spawn(
+            spawn,
+            Box::new(|_| {}),
+            Box::new(move |_, why| {
+                let _ = tx.send(why);
+            }),
+        )
+        .unwrap_or_else(|e| panic!("refused before its launch, not where the race is: {e:#}"));
+    match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+        Ok(why) => {
+            let why = why.unwrap();
+            assert!(why.contains("attend ton accord"), "{why}");
+        }
+        Err(_) => {
+            proc.kill();
+            panic!("the old line ran after the update");
+        }
+    }
 }
 
 /// « Harness des plugins tiers : Refuser »: none runs, agreed or not, and « Autoriser » is refused; the harnesses of

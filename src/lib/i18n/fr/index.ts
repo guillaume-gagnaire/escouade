@@ -29,6 +29,7 @@ import inboxViews from './inboxViews';
 import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
+import workspace from './workspace';
 import prs from './prs';
 import envs from './envs';
 import repos from './repos';
@@ -94,6 +95,7 @@ export const fr = {
   branches,
   fetch: fetchZone,
   plan,
+  workspace,
   prs,
   envs,
   repos,

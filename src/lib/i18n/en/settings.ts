@@ -529,6 +529,20 @@ export default defineZone('settings', {
     pagesOpen: 'Open the launches’ pages',
     pagesOpenDesc:
       'When “▶ Test” or a launch command is ready, the page opens by itself. In Escouade, it’s its row of the “Browsers” section, apart: neither Escouade’s commands nor your cookies.',
+    agentPagesGroup: 'Agents’ pages',
+    customPage: 'Page of your own',
+    customPageDesc:
+      'An .html document your agents fill with their data (show_page, custom template). It is copied and shown in the same shelter as their pages: no network, no access to Escouade or your files. Kept on this machine, it comes before the one of .escouade.yml.',
+    customPagePlaceholder: 'design/my-review.html',
+    customPagePick: 'Choose a file…',
+    customPagePickTitle: 'Page of your own',
+    customPageFilter: 'HTML document',
+    customPageClear: 'Remove',
+    customPageNone: 'No page of your own: an agent asking for it is told to take review, diagram, compare or html.',
+    customPageRepo: 'Proposed by the repository (.escouade.yml): {path}',
+    customPageWaiting: 'Proposed by the repository (.escouade.yml): {path}, waiting for your trust (.escouade.yml, above).',
+    customPageAhead: 'This machine’s setting: it comes before the page .escouade.yml proposes ({path}).',
+    customPageNotHtml: 'A page of your own is an .html document.',
     pagesOpens: {
       agent: 'In Escouade',
       system: 'In the system browser',
@@ -658,6 +672,7 @@ export default defineZone('settings', {
       teardown: 'Worktree teardown',
       launch: 'Launch',
       test: 'Test command',
+      page: 'Page of your own (agents’ pages)',
     },
     export: 'Export to .escouade.yml',
     exportDesc:

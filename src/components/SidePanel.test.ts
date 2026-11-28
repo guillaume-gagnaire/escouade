@@ -15,6 +15,14 @@ const LOG = {
 describe('SidePanel', () => {
   beforeEach(() => resetApp({ projects: [project()], agents: [agent()] }));
 
+  it('has three tabs, the workflows being in the « Workspace » (ESC-689)', async () => {
+    fakeBackend({ git_files: () => [], git_log: () => LOG });
+    render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Non commités 0', 'Historique', 'PR et CI']);
+    expect(screen.queryByRole('tab', { name: /Workflow/ })).toBeNull();
+  });
+
   it('switches between the uncommitted files and the history', async () => {
     fakeBackend({ git_files: () => [change('src/a.ts'), change('src/b.ts')], git_log: () => LOG });
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });

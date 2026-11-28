@@ -1,9 +1,10 @@
 // The diagram of a workflow from an entry (ESC-406, direction A of design/workflow-path) on the fake agent of ESC-193, at
-// the runner's size (1024 × 728, the panel 340 px): an agent comes into GSD by Plan, goes round its loop once, on to
+// the runner's size (1024 × 728), opened from the step on the agent's card in the « Workspace » (ESC-689): an agent
+// comes into GSD by Plan, goes round its loop once, on to
 // Verify, back to Plan, and executes again. The diagram starts from the door it took, draws only what that door reaches
 // (Discuss folded, opened on demand), traces its path in full lines over the possibles with each passage numbered on
-// its step, and says it in words in an ordered list; another agent stays a dot. Nothing sticks out, in the column and
-// enlarged, in both themes. ESCOUADE_E2E_SHOTS names a folder for the screenshots.
+// its step, and says it in words in an ordered list; another agent stays a dot. Nothing sticks out of the work panel,
+// in both themes. ESCOUADE_E2E_SHOTS names a folder for the screenshots.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -77,6 +78,16 @@ const fits = (scope: Locator, frame: Locator) =>
       }, f),
     );
 
+/** The « Workspace » open (from the menu of « Éditeur »), then the diagram from the step on `name`'s card. */
+async function openStep(page: Page, name: string) {
+  if (!(await page.locator('.ws').count())) {
+    await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+    await page.getByRole('menuitemradio', { name: 'Workspace' }).click();
+  }
+  await page.locator('.ws article.agent').filter({ hasText: name }).getByTestId('card-step').click();
+  await expect(page.getByTestId('workflow-diagram-big')).toBeVisible();
+}
+
 test('the diagram from the door an agent took: its path through a loop and a way back, over what is possible', async ({ app }) => {
   test.setTimeout(240_000);
   const { page } = app;
@@ -100,12 +111,11 @@ test('the diagram from the door an agent took: its path through a loop and a way
   const a2 = await openName(page);
   await page.locator('.card').filter({ hasText: a1 }).click();
 
-  await page.keyboard.press('Control+Shift+B');
-  const side = page.locator('aside.git-side');
-  await side.getByRole('tab', { name: /^Workflow/ }).click();
-  const tab = side.getByTestId('workflow');
-  await tab.getByRole('tab', { name: 'Diagramme' }).click();
-  const dg = tab.getByTestId('workflow-diagram');
+  // The « Workspace », from the menu of « Éditeur »; the diagram from the step on the agent's card (ESC-689).
+  await openStep(page, a1);
+  const big = page.getByTestId('workflow-diagram-big');
+  const dg = big.locator('.dg-canvas');
+  await expect(big.locator('.dg-title')).toContainText('entré par /gsd:plan-phase');
 
   // It starts from the door the agent took, alone and drawn as taken; no choice of doors.
   const doors = dg.locator('.dg-door');
@@ -113,7 +123,7 @@ test('the diagram from the door an agent took: its path through a loop and a way
   await expect(doors).toHaveAttribute('data-door', '/gsd:plan-phase');
   await expect(doors).toHaveClass(/taken/);
   await expect(doors.locator('.lb')).toHaveText('Entrée');
-  await expect(tab.getByRole('radiogroup')).toHaveCount(0);
+  await expect(big.getByRole('radiogroup')).toHaveCount(0);
 
   // Only what that door reaches: Discuss is out of this path, folded, opened on demand.
   const nodes = dg.locator('.dg-node');
@@ -123,10 +133,10 @@ test('the diagram from the door an agent took: its path through a loop and a way
     'gsd:execute-phase',
     'gsd:verify-work',
   ]);
-  const fold = tab.getByRole('button', { name: '1 étape hors de ce chemin' });
+  const fold = big.getByRole('button', { name: '1 étape hors de ce chemin' });
   await expect(fold).toHaveAttribute('aria-expanded', 'false');
   await fold.click();
-  const off = tab.getByTestId('workflow-off');
+  const off = big.getByTestId('workflow-off');
   await expect(off.getByText('Discuss phase')).toBeVisible();
   await expect(off.getByText('Pas atteignable depuis /gsd:plan-phase.')).toBeVisible();
 
@@ -166,7 +176,7 @@ test('the diagram from the door an agent took: its path through a loop and a way
   expect(strokes.fwd).toEqual({ width: 1.2, dashed: true });
 
   // In words, for a screen reader: the ordered list of its passages.
-  const told = tab.getByRole('list', { name: `Chemin de ${a1}, dans l’ordre` });
+  const told = big.getByRole('list', { name: `Chemin de ${a1}, dans l’ordre` });
   const items = await told.getByRole('listitem').allTextContents();
   expect(items).toHaveLength(6);
   expect(items[0]).toBe('Plan phase, entrée par /gsd:plan-phase');
@@ -176,46 +186,12 @@ test('the diagram from the door an agent took: its path through a loop and a way
   expect(items[4]).toMatch(/^Plan phase, retour depuis Verify work( : .+)?, 3e passage$/);
   expect(items[5]).toBe('Execute phase, 2e passage, en cours');
 
-  // In the panel of 340 px, in both themes: nothing sticks out, the numbers stay in their step, clear of its name.
-  expect(Math.round((await side.boundingBox())!.width)).toBe(340);
-  for (const theme of ['dark', 'light'] as const) {
-    await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
-    expect(await fits(tab, side), theme).toEqual({ out: 0, inside: true, clear: true });
-    if (SHOTS) await side.screenshot({ path: path.join(SHOTS, `workflow-path-column-${theme}.png`), animations: 'disabled' });
-  }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-
   // The other agent of the workflow: a dot where it is, its path not drawn.
   await expect(nodes.nth(2).locator('circle.ag title')).toHaveText(a2);
   await expect(nodes.nth(1).locator('circle.ag.cur title')).toHaveText(a1);
   await expect(dg.locator('.dg-bead')).toHaveCount(6);
-  // Opened, it is the one read: it came in by Verify, which reaches Plan and Execute by its way back; one passage.
-  await page.locator('.card').filter({ hasText: a2 }).click();
-  await expect(doors).toHaveAttribute('data-door', '/gsd:verify-work');
-  await expect(dg.locator('.dg-bead')).toHaveText(['1']);
-  await expect(nodes.nth(2).locator('circle.ag.cur title')).toHaveText(a2);
-  await expect(nodes.nth(1).locator('circle.ag title')).toHaveText(a1);
-  // Back to the first: its own door and path again, the other a dot on Verify.
-  await page.locator('.card').filter({ hasText: a1 }).click();
-  await expect(doors).toHaveAttribute('data-door', '/gsd:plan-phase');
-  await expect(dg.locator('.dg-bead')).toHaveCount(6);
-  await expect(nodes.nth(2).locator('circle.ag title')).toHaveText(a2);
-  await expect(nodes.nth(1).locator('circle.ag.cur title')).toHaveText(a1);
-  expect(await fits(tab, side)).toEqual({ out: 0, inside: true, clear: true });
 
-  // Enlarged: the same logic over the work panel, nothing wider than it at 1024 px.
-  await tab.getByRole('button', { name: 'Agrandir le diagramme' }).click();
-  const big = page.getByTestId('workflow-diagram-big');
-  await expect(big).toBeVisible();
-  await expect(big.locator('.dg-title')).toContainText('entré par /gsd:plan-phase');
-  const canvas = big.locator('.dg-canvas');
-  await expect(canvas.locator('.dg-door')).toHaveAttribute('data-door', '/gsd:plan-phase');
-  await expect(canvas.locator('.dg-node')).toHaveCount(3);
-  await expect(beads(canvas, 'gsd:plan-phase')).toHaveText(['1', '2', '5']);
-  await expect(lines(canvas, 'walked')).toHaveCount(3);
-  await expect(lines(canvas, 'took')).toHaveCount(1);
-  await expect(big.getByRole('list', { name: `Chemin de ${a1}, dans l’ordre` }).getByRole('listitem')).toHaveCount(6);
-  await expect(big.getByRole('button', { name: '1 étape hors de ce chemin' })).toBeVisible();
+  // Over the work panel at 1024 px, in both themes: nothing sticks out, the numbers stay in their step, clear of its name.
   for (const theme of ['dark', 'light'] as const) {
     await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
     expect(await fits(big, big), `enlarged, ${theme}`).toEqual({ out: 0, inside: true, clear: true });
@@ -224,7 +200,25 @@ test('the diagram from the door an agent took: its path through a loop and a way
   const bar = await big.locator('.dg-bar').evaluate((el) => el.scrollWidth <= el.clientWidth);
   expect(bar).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await canvas.focus();
+  await dg.focus();
+  await page.keyboard.press('Escape');
+  await expect(big).toHaveCount(0);
+
+  // From the other agent's card, it is the one read: it came in by Verify, which reaches Plan and Execute by its way
+  // back; one passage.
+  await openStep(page, a2);
+  await expect(doors).toHaveAttribute('data-door', '/gsd:verify-work');
+  await expect(dg.locator('.dg-bead')).toHaveText(['1']);
+  await expect(nodes.nth(2).locator('circle.ag.cur title')).toHaveText(a2);
+  await expect(nodes.nth(1).locator('circle.ag title')).toHaveText(a1);
+  await page.keyboard.press('Escape');
+  await expect(big).toHaveCount(0);
+  // Back to the first: its own door and path again, the other a dot on Verify.
+  await openStep(page, a1);
+  await expect(doors).toHaveAttribute('data-door', '/gsd:plan-phase');
+  await expect(dg.locator('.dg-bead')).toHaveCount(6);
+  await expect(nodes.nth(2).locator('circle.ag title')).toHaveText(a2);
+  await expect(nodes.nth(1).locator('circle.ag.cur title')).toHaveText(a1);
   await page.keyboard.press('Escape');
   await expect(big).toHaveCount(0);
 
@@ -232,12 +226,9 @@ test('the diagram from the door an agent took: its path through a loop and a way
   const back = await app.restart();
   await back.setViewportSize({ width: 1024, height: 728 });
   await back.locator('.card .name').filter({ hasText: a1 }).first().click();
-  const side2 = back.locator('aside.git-side');
-  await side2.waitFor({ state: 'visible', timeout: 3000 }).catch(() => back.keyboard.press('Control+Shift+B'));
-  await side2.getByRole('tab', { name: /^Workflow/ }).click();
-  const tab2 = side2.getByTestId('workflow');
-  await tab2.getByRole('tab', { name: 'Diagramme' }).click();
-  const dg2 = tab2.getByTestId('workflow-diagram');
+  await openStep(back, a1);
+  const big2 = back.getByTestId('workflow-diagram-big');
+  const dg2 = big2.locator('.dg-canvas');
   await expect(dg2.locator('.dg-door')).toHaveAttribute('data-door', '/gsd:plan-phase');
   await expect(dg2.locator('.dg-node')).toHaveCount(3);
   await expect(beads(dg2, 'gsd:plan-phase')).toHaveText(['1', '2', '5']);
@@ -246,5 +237,5 @@ test('the diagram from the door an agent took: its path through a loop and a way
   await expect(lines(dg2, 'walked')).toHaveCount(3);
   await expect(lines(dg2, 'took')).toHaveCount(1);
   await expect(dg2.locator('[data-step="gsd:plan-phase"] .dg-self.took text')).toHaveText('1/3');
-  await expect(tab2.getByRole('list', { name: `Chemin de ${a1}, dans l’ordre` }).getByRole('listitem')).toHaveCount(6);
+  await expect(big2.getByRole('list', { name: `Chemin de ${a1}, dans l’ordre` }).getByRole('listitem')).toHaveCount(6);
 });

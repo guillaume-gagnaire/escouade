@@ -2,8 +2,8 @@
 title: "Conversation vocale"
 subject: "Voix"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-97","ESC-110","ESC-114","ESC-115","ESC-131","ESC-132","ESC-134","ESC-136","ESC-137"]
-decisions: []
+tickets: ["ESC-97","ESC-110","ESC-114","ESC-115","ESC-131","ESC-132","ESC-134","ESC-136","ESC-137","ESC-664","ESC-665"]
+decisions: ["voix-et-modeles-epingles-a-une-revision","la-sensibilite-du-micro-se-regle-avec-un"]
 compared: null
 ---
 
@@ -138,3 +138,20 @@ Réglages › Voix › Conversation (voir *Réglages*) :
 - Une transcription en ligne qui échoue n'est jamais refaite par Whisper : la phrase est perdue.
 - Groq lit en anglais seulement ; Orpheus, Aura et Flash v2 ne lisent pas le français (Piper le lit).
 - Une liste de choix d'un formulaire MCP ne prend pas de réponse libre à la voix.
+
+## Les voix, à une révision fixée de leur dépôt
+
+Ceci précise le **Téléchargement** d'une voix, plus haut. Chaque voix de la liste a, avec ses tailles et ses SHA-256, le commit de son dépôt Hugging Face d'où elle se télécharge (`<dépôt>/resolve/<commit>/<fichier>`), jamais `main`. Un dépôt a un seul commit pour toutes ses voix. `rhasspy/piper-voices` réentraîne ses voix sur place depuis le 2026-11-09 : sur `main`, les réglages de `fr_FR-siwis-medium` font 6 369 octets, la liste en attend 4 875, et le téléchargement échouait. Les voix officielles sont prises au commit `e7229f7d` (2026-11-02), le dernier où les 36 voix de la liste ont encore leurs tailles et leurs empreintes.
+
+- La liste et son commit changent ensemble, à une mise à jour de la liste, faite exprès. `node scripts/piper-voices-check.mjs` vérifie chaque fichier de chaque voix au commit indiqué (taille et empreinte LFS par les en-têtes, sans télécharger les modèles). Le test ignoré `the_pinned_files_are_the_catalog_s` vérifie la même chose, avec en plus les modèles de whisper.cpp.
+- Un fichier qui ne correspond pas n'est jamais gardé, et le message le dit en clair (« Le fichier publié pour cette voix a changé (…) : … c'est à Escouade de se mettre à jour », voir *Dictée*).
+
+## Sensibilité du micro, et son testeur
+
+Ceci précise *Le tour*, *Barge-in et écho* et *Réglages*. Le seuil de la voix se règle, et un testeur montre en direct ce que le détecteur entend.
+
+- **« Sensibilité du micro »**, dans Réglages › Voix › Conversation, sous « Délai avant l'envoi » : un curseur de « Moins sensible » à « Plus sensible », en 11 crans (-5 à +5). **Par défaut, 0 : le détecteur d'avant la 2.2.12**, à l'identique : une tranche de 20 ms est de la voix au-dessus de 3,2 fois le bruit de la pièce (+10 dB) et du plancher de -46 dBFS. Chaque cran déplace de 1,5 dB **le seuil au-dessus du bruit et le plancher ensemble** (de -53,5 à -38,5 dBFS pour le plancher) : dans une pièce calme, c'est le plancher qui décide ; dans une pièce bruyante, le bruit. Le seuil ne descend jamais sous 2 fois le bruit (+6 dB) : les variations de la pièce d'une tranche à l'autre ne passent pas pour de la voix ; au-delà de +3, seul le plancher baisse encore. Gardé avec les réglages du poste (`settings.json`), jamais dans `.escouade.yml`.
+- **Ce qu'il touche** : la conversation vocale seulement, quelle que soit la transcription (locale ou en ligne, en direct ou par requête : la phrase est toujours trouvée sur la machine) : le début d'une phrase, sa fin (le silence qui la finit), et la coupure de l'agent quand l'utilisateur parle par-dessus (le seuil au-dessus de la pièce et le plancher, jamais ce qui est appris de l'écho). **La dictée n'en dépend pas** : elle écoute du clic au second clic, sans détecteur. La rangée le dit.
+- **Rien d'autre ne change** : 160 ms de voix sur 240 ms pour commencer, « Délai avant l'envoi » pour finir, 60 s au plus, l'écho appris sur les 400 premières ms jouées et ses 9,5 dB.
+- **« Tester »**, à côté du curseur, ouvre l'écoute du « Micro utilisé » et montre, toutes les 50 ms : le niveau de la voix (la tranche la plus forte), le bruit de la pièce appris (hachuré), la ligne du seuil, leurs valeurs en dB, et un témoin « Voix détectée » qui s'allume quand le détecteur entend le début d'une phrase et s'éteint à son silence de fin (« Délai avant l'envoi »). Tant que le bruit n'est pas mesuré : « Reste silencieux un instant : le bruit de la pièce se mesure. » Bouger le curseur **déplace la ligne sur-le-champ** (calculée dans la fenêtre à partir du bruit appris), et le détecteur prend le nouveau seuil dès ses tranches suivantes, le bruit appris gardé.
+- Le testeur s'arrête par « Arrêter », en quittant la page ou les réglages, à la fermeture ou au rechargement de la fenêtre, quand une dictée ou une conversation commence (elles prennent le micro), et après 10 minutes. Pendant une dictée ou une conversation, il ne s'ouvre pas et le dit. **Il ne garde ni n'envoie rien de ce qu'il entend** : le son est jeté tranche par tranche après sa mesure ; seuls les niveaux vont à la fenêtre. Sa note le dit.

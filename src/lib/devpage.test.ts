@@ -141,12 +141,20 @@ describe('a page’s life', () => {
     expect(devpages.pages.a7.phase).toBe('stalled');
   });
 
-  it('sends another origin to the system’s browser, and says so', () => {
+  it('sends a mail address to the system, and says so', () => {
     const b = fakeBackend();
     const toast = vi.spyOn(app, 'toast');
-    onPageEvent({ agentId: 'a7', phase: 'outside', url: 'https://github.com/gagnaire/escouade' });
-    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['https://github.com/gagnaire/escouade']);
-    expect(toast).toHaveBeenCalledWith('github.com s’est ouvert dans ton navigateur : ici, seul localhost:4111 s’affiche.', 'info');
+    onPageEvent({ agentId: 'a7', phase: 'outside', url: 'mailto:support@example.com' });
+    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['mailto:support@example.com']);
+    expect(toast).toHaveBeenCalledWith('mailto:support@example.com s’est ouvert hors d’Escouade, dans l’application du système.', 'info');
+  });
+
+  it('says a window of the page was refused beyond the few it may have open', () => {
+    const b = fakeBackend();
+    const toast = vi.spyOn(app, 'toast');
+    onPageEvent({ agentId: 'a7', phase: 'popups', url: '' });
+    expect(b.called('open_url')).toEqual([]);
+    expect(toast).toHaveBeenCalledWith('La page a déjà 3 fenêtres ouvertes : ferme-en une pour en ouvrir une autre.', 'info');
   });
 
   it('is shown by its row', async () => {
@@ -358,5 +366,36 @@ describe('the widths of a page: full, tablet, mobile', () => {
     await openLaunchPage(A, RECIPE.open);
     onPageEvent({ agentId: 'a7', phase: 'responsive', url: '' });
     expect(modeOf('a7')).toBe('tablet');
+  });
+
+  it('shows the page at the width of an agent’s capture for its time, then gives it back its own, never kept (ESC-670)', async () => {
+    const b = fakeBackend();
+    await openLaunchPage(A, RECIPE.open);
+    setMode('a7', 'tablet');
+    onPageEvent({ agentId: 'a7', phase: 'width', url: 'mobile' });
+    expect(modeOf('a7')).toBe('mobile');
+    expect(loadModes()).toEqual({ 'pagination-users · web': 'tablet' });
+    onPageEvent({ agentId: 'a7', phase: 'width', url: '' });
+    expect(modeOf('a7')).toBe('tablet');
+    expect(b.called('devpage_mode').map((c) => c.args.mode)).toEqual(['tablet', 'mobile', 'tablet']);
+    // A width it does not know gives it back its own.
+    onPageEvent({ agentId: 'a7', phase: 'width', url: 'watch' });
+    expect(modeOf('a7')).toBe('tablet');
+  });
+
+  it('keeps the width an agent drives it to, the bar following; a driving change moves nothing (ESC-679)', async () => {
+    const b = fakeBackend();
+    await openLaunchPage(A, RECIPE.open);
+    onPageEvent({ agentId: 'a7', phase: 'mode', url: 'mobile' });
+    expect(modeOf('a7')).toBe('mobile');
+    expect(loadModes()).toEqual({ 'pagination-users · web': 'mobile' });
+    expect(b.called('devpage_mode').map((c) => c.args.mode)).toEqual(['mobile']);
+    // A width it does not know changes nothing; nor does a gesture's news.
+    onPageEvent({ agentId: 'a7', phase: 'mode', url: 'watch' });
+    onPageEvent({ agentId: 'a7', phase: 'drive', url: '' });
+    expect(modeOf('a7')).toBe('mobile');
+    onPageEvent({ agentId: 'a7', phase: 'mode', url: 'full' });
+    expect(modeOf('a7')).toBe('full');
+    expect(loadModes()).toEqual({});
   });
 });

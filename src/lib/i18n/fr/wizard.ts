@@ -166,6 +166,11 @@ export default {
   },
   /** The checks: what would keep the way of working from working, and its correction. */
   checks: {
+    unread: {
+      title: 'Lecture du dépôt impossible : {error}',
+      desc: 'Git n’a pas pu lire le dossier : rien n’est créé ni commité sur cette erreur. Réessaie ; si elle revient, vérifie le dépôt dans un terminal.',
+      fix: 'Réessayer',
+    },
     noCommit: {
       title: 'Le dépôt n’a aucun commit',
       desc: 'Aucun ticket ne démarre : un worktree part d’un commit. Fais un premier commit (vide : aucun fichier n’est ajouté).',
@@ -190,6 +195,7 @@ export default {
       desc: 'Installe un harness (Claude Code : npm install -g @anthropic-ai/claude-code), ou indique son chemin dans Réglages › Comptes et harness.',
     },
     ok: 'Harness trouvé · un compte sert le projet · dépôt prêt',
+    reading: 'Lecture du dépôt…',
   },
   /** Réglages › Projets › Projet: the assistant opened again on the project. */
   reopen: {

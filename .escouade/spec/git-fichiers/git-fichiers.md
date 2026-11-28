@@ -2,8 +2,8 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-522","ESC-561","ESC-659"]
-decisions: [277,293]
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-522","ESC-561","ESC-659","ESC-689"]
+decisions: [277,293,"les-workflows-dans-le-workspace-l-onglet"]
 compared: "2026-10-31T16:24:52+01:00"
 order: 22
 ---
@@ -17,7 +17,7 @@ Le panneau Git montre ce que les agents ont changé : les fichiers non commités
 ### Le panneau
 
 - Il se ferme par son × au bout des onglets (« Fermer le panneau »). À côté de la disposition classique, il se ferme ; `Ctrl+Maj+B` ou « Fichiers » de l'en-tête le rouvrent. Côte à côte, il ramène à la disposition classique sans panneau, retenue comme la disposition ; `Ctrl+Maj+L` ou le sélecteur de disposition le rouvrent. L'infobulle dit le raccourci et comment le rouvrir.
-- Quatre onglets : « Non commités », « Historique », « Workflow » (voir *Workflow*) et « PR et CI » (voir *Pull requests*). Sous 420 px de large, les onglets se resserrent, le compte de « Workflow » s'efface (choix 132) et « PR et CI » quitte la bande pour le × (choix 189) : les mots de la CI sur la carte de l'agent l'ouvrent alors.
+- Trois onglets : « Non commités », « Historique » et « PR et CI » (voir *Pull requests*). Les workflows du projet n'y sont plus : ils sont dans le Workspace, l'étape sur la carte de chaque agent et « Workflows » de la toile (voir *Workspace*). Sous 420 px de large, les onglets se resserrent et tiennent tous les trois à côté du × (340 px à côté de la conversation). Les mots de la CI sur la carte de l'agent ouvrent aussi « PR et CI ».
 - Dans un projet sans agent, le panneau s'ouvre aussi (« PR et CI du projet », `Ctrl+Maj+B`) : les fichiers du projet, son historique, et ses PR ouvertes.
 - **« Non commités »** : portée « Cet agent » ou « Tout le projet ». Un fichier est attribué à un agent par son worktree ou, sans worktree, par ses outils d'édition (`Edit`, `Write`). Un clic ouvre le diff ; le bouton `</>` ou le clic droit ouvrent le fichier dans l'éditeur. La liste dessine les 500 premiers fichiers, puis « … et N autres fichiers » ; le compte de l'onglet, « Voir le diff » et les commits les prennent tous.
 - **« Historique »** : le graphe des 300 derniers commits de tout le dépôt (branches locales et distantes, tags ; les branches des agents étiquetées de leur nom). La branche de l'agent (son worktree, sinon la branche courante) est mise en avant, le reste atténué. Un clic sur un commit ouvre son diff (contre le premier parent pour un merge). Le graphe se redessine à chaque commit, merge ou branche ; son menu contextuel agit sur les branches (voir *Branches*).
@@ -149,4 +149,4 @@ Réglages › Projets, groupe « Git ». Un dossier ou un préfixe refusé l'est
 - Le bord gauche du panneau se tire comme le bord droit de la barre latérale, à côté de la conversation comme côte à côte (« Largeur du panneau », infobulle « Tirer pour élargir · double clic : largeur par défaut ») : vers la gauche il s'élargit. Au clavier : ← l'élargit et → le rétrécit de 16 px, Début le met au plus étroit, Fin au plus large. Un double clic rend la largeur par défaut.
 - Par défaut : 340 px à côté de la conversation, 44 % de la zone de travail côte à côte. Jamais moins de 340 px (ses onglets tiennent) ; jamais au point de laisser moins de 356 px à la conversation (ce que lui laissait une fenêtre de 1 024 px), ni plus de 1 200 px.
 - Deux largeurs gardées, une par forme (à côté de la conversation, côte à côte), les mêmes pour toute l'app, d'un lancement à l'autre. Une fenêtre trop étroite dessine le panneau plus étroit sans oublier la largeur choisie, rendue quand la place revient.
-- Les onglets suivent sa largeur : sous 420 px ils se resserrent comme dit plus haut, au-delà « PR et CI » revient.
+- Les onglets suivent sa largeur : sous 420 px ils se resserrent comme dit plus haut, tous les trois toujours là.

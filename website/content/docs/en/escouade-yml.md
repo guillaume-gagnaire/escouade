@@ -235,6 +235,14 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 - A part turned off loses its views, its MCP tools, what its agents are told of it and its background work, deleting nothing. `true` starts nothing: a part’s background work follows its own settings. A repository therefore cannot run anything more than what the user already allowed, nor lift a protection (the trust of the commands, the private project, the permissions stay as they are).
 - A team may recommend them (`defaults`, after the repository) or impose them (`enforced`, before the device) in its team `.escouade.yml`.
 
+### pages
+
+| Key | Type | Values | Missing | Example |
+|---|---|---|---|---|
+| `pages.custom` | Relative path | An `.html` document of the repository | no page of one’s own proposed | `custom: design/my-review.html` |
+
+- `custom`: the page of one’s own the repository proposes to the agents (`show_page` with the `custom` template). It is served in the same shelter as their pages, without network, and receives their data in `window.escouade`. It waits for your trust, with the file’s commands: before that, nothing of it applies. It never leaves the repository: a full path, or one that goes up out of it (`../`), is refused; a link that leads outside is not followed. A page of your own set on your machine (Settings › Projects › Launch, Agents’ pages group) comes first.
+
 ### plugins
 
 | Key | Type | Values | Missing | Example |

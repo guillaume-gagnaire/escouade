@@ -124,6 +124,7 @@ describe('Réglages › Voix', () => {
         rate: 1,
         volume: 1,
         silenceMs: 1200,
+        sensitivity: 0,
         engine: 'local',
         onlineService: 'openai',
         onlineModels: {},

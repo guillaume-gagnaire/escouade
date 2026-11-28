@@ -1,7 +1,7 @@
 ---
 title: "Serveur MCP"
 subject: "Harness"
-sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44","crates/escouade-mcp/src/http.rs (Gate::answer, error)","CI de release/2.3, run 44936350320 (Windows)","docs/security/audit-2026-11/rapport.md, fiche SEC-07 (ESC-595)"]
+sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44","crates/escouade-mcp/src/http.rs (Gate::answer, error)","CI de release/2.3, run 44936350320 (Windows)","docs/security/audit-2026-11/rapport.md, fiche SEC-07 (ESC-595)","https://github.com/guillaume-gagnaire/escouade/pull/46","2026-11-24-escouade-mcp-plan-design.md (PR #46, écrit depuis le pont PhoneBox)"]
 tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513","ESC-550","ESC-619","ESC-620","ESC-557","ESC-595","ESC-646"]
 decisions: [153,211,210,242,279,290,302]
 compared: null
@@ -373,3 +373,13 @@ Ce qui suit complète *Jetons et garde-fous* et la lecture du corps par la porte
 - **`withdraw_ask`** : sa raison est la note que l'utilisateur lit dans la trace (« tranché dans la conversation du chef : B ») ; jamais un secret.
 - **La consigne** des instructions du serveur ajoute : retirer une demande avec une note qui dit comment elle a été tranchée ; chef d'escouade, prendre en charge un ticket « À tester » qu'on vérifie et cocher comme réglé ce qu'on a réglé par un autre chemin, jamais ce qui reste le geste de l'utilisateur.
 - Le journal d'activité garde le ticket, l'agent, la décision ou le projet nommés, jamais la note.
+
+## Le plan d'un agent dans `list_background_work` (PR #46)
+
+`list_background_work` donne aussi le **plan** de l'agent, tel que la fenêtre le montre au-dessus de la conversation, pour les clients hors de la fenêtre (widget PhoneBox, agent qui suit le travail d'un collègue) : `plan: { title, done, total, tasks }`.
+
+- `title` : le titre du plan, `null` sans titre. `done` : les tâches faites ; `total` : toutes (« 3/7 tâches, 43 % » sans lire la liste).
+- `tasks` : dans l'ordre du plan, comme la fenêtre ; chacune avec `id`, `title`, `status` (`pending`, `inProgress`, `done`), `active` (ce qu'elle fait en cours) et `steps` (`[faites, en tout]`, quand un fichier de plan les compte), ces deux derniers omis quand ils manquent. Ce qu'une tâche attend (`blocked_by`) n'est pas donné : la fenêtre ne le montre pas.
+- `plan: null` quand l'agent n'a pas de plan, ou un plan sans tâche.
+- La règle des sous-agents et des tâches s'applique : un appelant qui n'agit pas sur le projet de l'agent (l'agent que le cœur n'a plus) ne reçoit du plan que `{ done, total }`, comme il ne reçoit des lignes que `id`, `type`, `status`, `startedAt` et `endedAt`. Les autres champs de la réponse ne changent pas.
+- Formats dans docs/PROTOCOL.md (ligne de `list_background_work`).

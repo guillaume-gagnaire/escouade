@@ -2,8 +2,8 @@
 title: "Fonctionnalités"
 subject: "fenetre"
 sources: ["docs/FEATURES.md § 1 et § 2 (conception du 2026-10-28, choix du chef)","design/features/reglages-fonctionnalites.png","design/features/assistant.png","design/features/captures/proposition-fonctionnalite-clair-1440.png","docs/ONBOARDING.md § 7 (les découvertes)","crates/escouade-model/src/features.rs (le registre)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur)","src-tauri/src/offers.rs (les propositions, leurs signaux et leurs seuils)","src/lib/features.ts (dans la fenêtre)","src/lib/offers.svelte.ts (les propositions dans la fenêtre)","docs/FEATURES.md § 1 (conception du 2026-10-28, choix du chef)","docs/ONBOARDING.md § 7 (les découvertes) et § 4.5 bis (la station des fonctionnalités)","crates/escouade-model/src/features.rs (le registre, NEW_INSTALL)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur, l'assistant)","src/components/features/FeatureTour.svelte (l'assistant)","tests/site-shots/features-tour.spec.ts (les captures de l'assistant)"]
-tickets: ["ESC-550","ESC-558","ESC-559"]
-decisions: [226,276,280]
+tickets: ["ESC-550","ESC-558","ESC-559","ESC-701"]
+decisions: [226,276,280,"la-2-2-11-a-la-2-2-19-reversees-dans-la"]
 compared: null
 ---
 
@@ -165,3 +165,11 @@ L'état des fonctionnalités vient du cœur : un client de l'API distante ou une
 - **Une installation neuve a toutes les fonctionnalités coupées** (`NEW_INSTALL`), l'essentiel seul, jusqu'à la station de l'assistant du premier lancement, où chacune s'allume d'un geste. Ce que l'utilisateur choisit à « Ce que tu veux brancher » allume sa fonctionnalité : une source de tickets le Kanban, la voix (Whisper ou un service) la Voix.
 - **Une installation mise à jour** garde allumé ce qu'elle utilise (le relevé) et coupe le reste jusqu'à l'assistant de la mise à jour, qui le lui présente. Seule la constante `NEW_INSTALL` a changé dans le cœur.
 - Ce que l'utilisateur choisit n'est jamais deviné ensuite : le relevé ne se refait pas, l'assistant ne s'ouvre plus de lui-même une fois fini ou passé.
+
+## Avec le Workspace de la 2.2 (ESC-701)
+
+La 2.2.13 à la 2.2.14 ont apporté le Workspace (la toile des agents) : le bouton « Éditeur » de la barre de titre ouvre un menu (« Éditeur », « Workspace »), et les workflows ont quitté le panneau latéral pour la toile. Sur la 2.3, ce que l'Éditeur et les Workflows emportent suit ces nouvelles places ; ceci précise leurs lignes du tableau :
+
+- **Éditeur coupé** : le bouton reste dans la barre de titre, pour « Workspace », mais son menu n'a plus l'entrée « Éditeur », et son glisser vers un volet n'ouvre plus rien. Le reste de la ligne vaut tel quel.
+- **Workflows coupés** : la barre du Workspace n'a plus « Workflows » ni son panneau, et la carte d'un agent n'a plus l'étape de son workflow (ni son schéma à ouvrir). L'onglet « Workflow » du panneau latéral n'existe plus, allumé ou non. Le groupe « Workflow » de Réglages › Projet › Kanban, `get_workflow` et le fond s'en vont comme avant.
+- Le **Workspace** lui-même n'est pas une fonctionnalité : il n'a pas d'interrupteur.

@@ -220,6 +220,18 @@ describe('Réglages › Plugins', () => {
     expect(app.settings.pluginsVerifiedOnly).toBe(true);
   });
 
+  it('« Mettre à jour tout seuls » is beside it in Sécurité, off by default, and saved at the gesture (ESC-700)', async () => {
+    const b = fakeBackend({ plugins_list: () => [], plugin_seed_offers: () => [], save_settings: () => [] });
+    render(SettingsModal, { page: 'plugins' });
+    const security = screen.getByRole('region', { name: 'Sécurité' });
+    const menu = within(security).getByRole('combobox', { name: 'Mettre à jour tout seuls' }) as HTMLSelectElement;
+    expect(menu.value).toBe('never');
+    expect(security).toHaveTextContent(/ne demandent rien de plus que celle installée/);
+    await userEvent.selectOptions(menu, 'verified');
+    await expect.poll(() => b.called('save_settings').length).toBe(1);
+    expect(b.called('save_settings')[0].args.settings).toMatchObject({ pluginsAutoUpdate: 'verified' });
+  });
+
   it('says discreetly that the revocation list is more than 7 days old, and nothing while it is fresh (audit SEC-15)', async () => {
     fakeBackend({ plugins_list: () => [], plugin_seed_offers: () => [] });
     plugins.store = { ...STORE, revocations: { ...STORE.revocations!, holdsSince: '2026-11-08T13:02:00Z', stale: false } };

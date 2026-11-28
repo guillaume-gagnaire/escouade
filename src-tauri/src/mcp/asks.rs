@@ -199,14 +199,14 @@ fn kind_of(k: AskKindArg) -> AskKind {
     }
 }
 
-fn urgency_of(u: UrgencyArg) -> Urgency {
+pub(super) fn urgency_of(u: UrgencyArg) -> Urgency {
     match u {
         UrgencyArg::Normal => Urgency::Normal,
         UrgencyArg::Today => Urgency::Today,
     }
 }
 
-fn recommend_of(r: AskRecommendArg) -> AskRecommend {
+pub(super) fn recommend_of(r: AskRecommendArg) -> AskRecommend {
     AskRecommend {
         option: r.option,
         text: r.text,
@@ -215,7 +215,9 @@ fn recommend_of(r: AskRecommendArg) -> AskRecommend {
 }
 
 /// The options, and their files (each with its option's id), in their order.
-fn options_of(options: Vec<AskOptionArg>) -> (Vec<AskOption>, Vec<(Option<String>, AskFileArg)>) {
+pub(super) fn options_of(
+    options: Vec<AskOptionArg>,
+) -> (Vec<AskOption>, Vec<(Option<String>, AskFileArg)>) {
     let mut files = Vec::new();
     let list = options
         .into_iter()

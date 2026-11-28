@@ -192,6 +192,8 @@ escouade_command::commands! {
         commands::plugin_run,
         commands::plugin_start,
         commands::plugins_check_updates,
+        // The updates by themselves that failed (ESC-700): the core's.
+        commands::plugins_auto_failed,
         commands::plugin_icon,
         commands::account_sign_in_ended,
         commands::claude_found,
@@ -535,6 +537,22 @@ escouade_command::commands! {
         commands::devpage_devtools,
         commands::devpage_mode,
         commands::devpage_close,
+        // The browsers read and driven and the agents' pages (ESC-669 to ESC-685): the window's webviews; the meter of
+        // « Sensibilité du micro » (ESC-665): the microphone.
+        commands::agentpage_capture,
+        commands::agentpage_click,
+        commands::agentpage_close,
+        commands::agentpage_open_trap,
+        commands::agentpage_outside,
+        commands::agentpage_read,
+        commands::agentpage_view,
+        commands::browser_drive_state,
+        commands::devpage_consents,
+        commands::devpage_dismiss,
+        commands::devpage_looking,
+        commands::voice_meter_set,
+        commands::voice_meter_start,
+        commands::voice_meter_stop,
         commands::deep_links_take,
         commands::save_image,
         commands::play_chime,
@@ -662,5 +680,24 @@ escouade_command::commands! {
         // download to the client in server mode, as `inbox_open_file` (`inbox_file_bytes` serves the bytes already).
         commands::inbox_save_file,
         commands::agent_local_open,
+        // A browser's or an agent's page's row and the core's state that drives it (ESC-669 to ESC-685): the webview is
+        // the window's, its agent the core's.
+        commands::agentpage_close_row,
+        commands::agentpage_drop_proposal,
+        commands::agentpage_info,
+        commands::agentpage_open_template,
+        commands::agentpage_place,
+        commands::agentpage_reopen,
+        commands::agentpage_rows,
+        commands::agentpage_version,
+        commands::browser_drive_hand,
+        commands::browser_drive_password,
+        commands::browser_drive_place,
+        commands::browser_drive_revisit,
+        commands::devpage_consent,
+        commands::devpage_lend,
+        commands::devpage_open_answer,
+        commands::devpage_open_asks,
+        commands::devpage_revoke,
     }
 }

@@ -87,8 +87,28 @@ async fn handed_file(h: &Harness, id: &str) -> (String, String) {
     (agent, text)
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
+#[test]
+fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
+    // Its future holds a whole handover (two cores and a team's server): in a debug build it outgrows the 2 MiB of a
+    // test's thread since the 2.2.11 to 2.2.20 came in (ESC-701; 16 MiB pass, nothing loops). Polled on a thread of its
+    // own, of 16 MiB.
+    let run = std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(4)
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(passes_to_a_teammate_then_to_the_teams_machine())
+        })
+        .unwrap();
+    if let Err(panic) = run.join() {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+async fn passes_to_a_teammate_then_to_the_teams_machine() {
     let (server, host, task, dir) = server().await;
     let store = Arc::new(MemoryStore::default());
     let alice_teams = teams(&dir.path().join("a"), store.clone());

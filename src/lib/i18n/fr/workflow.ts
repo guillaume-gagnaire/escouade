@@ -89,7 +89,7 @@ export default {
   },
   sendBack: 'Renvoyer : retour à {step}',
   ticketsEscouade: 'Le workflow des tickets d’Escouade, d’après le Kanban',
-  divider: 'Voir l’étape dans l’onglet Workflow',
+  divider: 'Voir l’étape sur le schéma du workflow',
   cardStep: 'Étape : {step}',
   // The Diagram view (ESC-245, choices 196 to 212).
   dg: {

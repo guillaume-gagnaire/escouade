@@ -1,6 +1,6 @@
 [package]
 name = "escouade"
-version = "2.2.10"
+version = "2.2.20"
 description = "Le poste de pilotage de tes agents Claude Code"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
@@ -32,6 +32,12 @@ desktop = [
     "dep:webkit2gtk",
     "dep:tauri-plugin-notification",
     "dep:objc2",
+    "dep:javascriptcore-rs",
+    "dep:cairo-rs",
+    "dep:block2",
+    "dep:objc2-foundation",
+    "dep:objc2-app-kit",
+    "dep:objc2-web-kit",
     "escouade-tauri-shim/desktop",
     "escouade-plugins/desktop",
     "escouade-voice-local/devices",
@@ -87,10 +93,12 @@ notify = "8"
 rusqlite = { version = "0.41", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 base64 = "0.23"
-# escouade-server update (ESC-515): the archive of a release, its signature checked with the updater's key.
+# escouade-server update (ESC-515): the archive of a release, its signature checked with the updater's key (its gzip by
+# flate2, below).
 minisign-verify = "0.3"
-flate2 = "1"
 tar = { version = "0.4", default-features = false }
+# The captures of `capture_browser` (ESC-670): decoded, reduced and written in JPEG, 600 KB at most.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 log = "0.4"
 # The system's language, in the usage statistics (`telemetry`).
 sys-locale = "0.3"
@@ -99,6 +107,9 @@ trash = "5"
 os_info = { version = "3", default-features = false }
 # The name of a Claude account's macOS keychain entry: Claude Code's own hash of its folder, in NFC.
 sha2 = "0.11"
+# The Mermaid embedded in the templates of the agents' pages, gzipped (ESC-674), and the archive of a release of
+# escouade-server update (ESC-515).
+flate2 = "1"
 # The protocol spoken to the plugins, shared with the plugins in Rust (`plugins/`, the kit).
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 # The ACP client (PLG-6), which the core's ACP harnesses share until they come out in process (INT-10).
@@ -204,12 +215,22 @@ libc = "0.2"
 # Tauri's windows already run on).
 gtk = { version = "0.18", optional = true }
 # The end of the page's process (`pagecrash`), on the WebView wry makes: its version.
-webkit2gtk = { version = "2.0", features = ["v2_20"], optional = true }
+webkit2gtk = { version = "2.0", features = ["v2_22"], optional = true }
+# The read bridge of the browsers (`browserread`, ESC-668): the result of a script in Escouade's world
+# (JavaScriptCore's value) and a capture cut and written in PNG (cairo), in the versions wry uses.
+javascriptcore-rs = { version = "=1.1.2", optional = true }
+cairo-rs = { version = "0.18", features = ["png"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-notification = { version = "2", optional = true }
 # The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
 objc2 = { version = "0.6", optional = true }
+# The read bridge of the browsers (`browserread`, ESC-668): a content world of Escouade's own and the
+# view's capture, in the versions wry uses.
+block2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError", "NSDictionary", "NSData", "NSGeometry", "NSValue"], optional = true }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSImage", "NSImageRep", "NSBitmapImageRep"], optional = true }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-app-kit", "WKWebView", "WKContentWorld", "WKFrameInfo", "WKSnapshotConfiguration"], optional = true }
 
 # The dependencies keep their line tables only (backtraces still say where), Escouade its full debug info: with
 # everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,

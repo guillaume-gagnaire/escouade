@@ -1,9 +1,9 @@
 ---
 title: ".escouade.yml"
 subject: "Projets"
-sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-481","ESC-493","ESC-530","ESC-560","ESC-561","ESC-653","ESC-658"]
-decisions: [165,201,194,255,294,308,311]
+sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md","docs/AGENT-PAGES.md § 7.4 (la page à soi)","ESC-677 (AP-7) : pages.custom ne s'applique qu'après l'accord du poste, ne sort jamais du projet"]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-481","ESC-493","ESC-530","ESC-560","ESC-561","ESC-653","ESC-658","ESC-677"]
+decisions: [165,201,194,255,294,308,311,"la-page-a-soi-le-poste-l-emporte-pages-c"]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -230,3 +230,17 @@ parts:
 - `.escouade.yml` n'est lu que s'il est un fichier ordinaire de 1 Mio au plus : un lien (une jonction sous Windows en est un), un tube nommé ou un fichier plus gros n'est pas lu, et le journal le dit. Un lien mis à sa place pendant la lecture n'est pas suivi non plus, sous Windows comme ailleurs.
 - Il n'est jamais écrit à travers un lien, ni par-dessus un fichier qu'il ne lit pas (trop gros) : l'export et « Écrire dans .escouade.yml » le refusent.
 - Sa lecture prend un temps proportionnel à sa taille : un gros fichier ne fige plus l'app.
+
+## La page à soi que propose le dépôt (ESC-677)
+
+Une clé de plus, dans un groupe `pages`, après `workflows.enabled` (voir *Les pages des agents*) :
+
+| Clé | Valeur |
+|---|---|
+| `pages.custom` | la page à soi que le dépôt propose aux agents (`show_page` avec `template: "custom"`) : un document `.html` par son chemin relatif au dépôt |
+
+- **Elle ne sort jamais du dépôt** : un chemin absolu (`/…`, `\…`, `C:…`, `~…`), qui porte un schéma (`https://…`) ou qui remonte (`..`), ou qui n'est pas un `.html`, est dit avec sa ligne et ignoré (« « ../x.html » sort du dépôt : une page à soi y reste »). À l'usage, son fichier est ouvert dans le dossier du projet, chemin vérifié sur le fichier ouvert : un lien ou une jonction qui mène dehors n'est pas suivi.
+- **Elle attend l'accord du poste**, comme les commandes : elle compte dans leur empreinte (`Key::command`), se lit en entier parmi elles dans Réglages › Projets › Équipe (« Page à soi (pages des agents) ») et ne s'applique qu'après « Faire confiance à ces commandes » ; avant, le projet n'en a pas (`show_page` le dit : « … attend l'accord de l'utilisateur »). Une valeur changée attend à nouveau ; celle approuvée avant reste en place jusque-là.
+- **Le poste l'emporte** : la « Page à soi » choisie sur la machine (Réglages › Projets › Lancement) passe devant celle du fichier, relu ou pas, et le réglage le dit. Celle du poste n'est jamais dans le fichier : un chemin de la machine ne se partage pas.
+- L'export écrit `pages.custom` tel que le fichier l'a donné, et rien quand le projet n'en a pas. Le schéma la décrit (un texte qui finit par `.html` ou `.htm`).
+- En 2.3, l'équipe peut l'imposer ou la recommander (AB-R).

@@ -14,7 +14,9 @@ use super::tools::{
 use super::Caller;
 use crate::core::Core;
 use crate::model::AgentStatus;
-use crate::plan::{BgKind, BgTask, PlanState, RunStatus, SubAgent, WorkflowRun};
+use crate::plan::{
+    BgKind, BgTask, PlanState, PlanTask, RunStatus, SubAgent, TaskStatus, WorkflowRun,
+};
 use crate::taskout::{TaskOutput, MAX_OUTPUT};
 use serde::Serialize;
 use std::collections::HashSet;
@@ -374,9 +376,70 @@ fn task_rows(plan: &PlanState, full: bool) -> Vec<TaskRow> {
         .collect()
 }
 
+/// A task of the plan, as the window lists it above the conversation: no `blocked_by`, which it
+/// does not show.
+#[derive(Serialize)]
+struct PlanTaskRow<'a> {
+    id: &'a str,
+    title: &'a str,
+    status: TaskStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    active: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    steps: Option<(u32, u32)>,
+}
+
+impl<'a> From<&'a PlanTask> for PlanTaskRow<'a> {
+    fn from(t: &'a PlanTask) -> Self {
+        PlanTaskRow {
+            id: &t.id,
+            title: &t.title,
+            status: t.status,
+            active: t.active.as_deref().filter(|a| !a.is_empty()),
+            steps: t.steps,
+        }
+    }
+}
+
+/// What a plan holds besides its counts: left out of an outline.
+#[derive(Serialize)]
+struct PlanDetail<'a> {
+    title: Option<&'a str>,
+    tasks: Vec<PlanTaskRow<'a>>,
+}
+
+/// The plan of an agent: its title and its tasks in the plan's order, with how many are done.
+#[derive(Serialize)]
+struct PlanView<'a> {
+    #[serde(flatten)]
+    detail: Option<PlanDetail<'a>>,
+    done: usize,
+    total: usize,
+}
+
+/// `plan` as `list_background_work` gives it: None without a task, its counts alone when `full`
+/// is false.
+fn plan_view(plan: &PlanState, full: bool) -> Option<PlanView<'_>> {
+    if plan.tasks.is_empty() {
+        return None;
+    }
+    Some(PlanView {
+        detail: full.then(|| PlanDetail {
+            title: plan.title.as_deref(),
+            tasks: plan.tasks.iter().map(PlanTaskRow::from).collect(),
+        }),
+        done: plan
+            .tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Done)
+            .count(),
+        total: plan.tasks.len(),
+    })
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Listing {
+struct Listing<'a> {
     id: String,
     name: String,
     status: AgentStatus,
@@ -384,6 +447,7 @@ struct Listing {
     work: WorkCounts,
     subagents: Vec<SubagentRow>,
     tasks: Vec<TaskRow>,
+    plan: Option<PlanView<'a>>,
 }
 
 /// `list_background_work`: the subagents and the background tasks of the agent `agent` names (in
@@ -413,6 +477,7 @@ pub(super) fn list(
             .as_ref()
             .map(|p| task_rows(p, full))
             .unwrap_or_default(),
+        plan: plan.as_ref().and_then(|p| plan_view(p, full)),
     })
 }
 

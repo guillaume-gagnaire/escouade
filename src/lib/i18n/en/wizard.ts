@@ -154,6 +154,11 @@ export default defineZone('wizard', {
     sharedOnLimit: 'shared accounts at the limit',
   },
   checks: {
+    unread: {
+      title: 'Could not read the repository: {error}',
+      desc: 'Git could not read the folder: nothing is created or committed on this error. Try again; if it comes back, check the repository in a terminal.',
+      fix: 'Try again',
+    },
     noCommit: {
       title: 'The repository has no commit',
       desc: 'No ticket starts: a worktree starts from a commit. Make a first commit (empty: no file is added).',
@@ -178,6 +183,7 @@ export default defineZone('wizard', {
       desc: 'Install a harness (Claude Code: npm install -g @anthropic-ai/claude-code), or give its path in Settings › Accounts and harnesses.',
     },
     ok: 'Harness found · an account serves the project · repository ready',
+    reading: 'Reading the repository…',
   },
   reopen: {
     label: 'Setup assistant',

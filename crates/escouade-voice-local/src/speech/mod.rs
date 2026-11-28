@@ -211,7 +211,7 @@ impl VoiceStore {
         Ok(())
     }
 
-    /// Downloads `v` from `base` (`https://huggingface.co`: `<base>/<repo>/resolve/main/<file>`), its settings first
+    /// Downloads `v` from `base` (`https://huggingface.co`: `file_url`, at its pinned revision), its settings first
     /// then its model, `progress` told the bytes of both so far.
     pub async fn download(
         &self,
@@ -221,14 +221,7 @@ impl VoiceStore {
         cancel: &AtomicBool,
         mut progress: impl FnMut(u64),
     ) -> Result<()> {
-        let url = |file: &str| {
-            format!(
-                "{}/{}/resolve/main/{}",
-                base.trim_end_matches('/'),
-                v.repo,
-                file
-            )
-        };
+        let url = |file: &str| file_url(base, v, file);
         crate::models::fetch_checked(
             client,
             &url(&v.json),
@@ -251,6 +244,18 @@ impl VoiceStore {
         )
         .await
     }
+}
+
+/// Where `file` of `v` is downloaded from: `<base>/<repo>/resolve/<revision>/<file>`, at the commit of its repository
+/// `voices.json` pins (ESC-664), never `main`: a voice retrained upstream keeps the files of the catalog.
+pub fn file_url(base: &str, v: &VoiceInfo, file: &str) -> String {
+    format!(
+        "{}/{}/resolve/{}/{}",
+        base.trim_end_matches('/'),
+        v.repo,
+        v.revision,
+        file
+    )
 }
 
 /// Where the voices are downloaded from.

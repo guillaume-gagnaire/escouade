@@ -239,9 +239,13 @@ fn commands_written() -> BTreeSet<String> {
                 stack.push(path);
                 continue;
             }
-            // The tests' own commands (`windowthread_tests`) are not the app's.
+            // The tests' own commands (`windowthread_tests`) are not the app's, nor a probe's (`agentpage_probe`'s
+            // `probe_touch`, served by the probe's own app, an example: ESC-701).
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if path.extension().is_none_or(|e| e != "rs") || name.ends_with("tests.rs") {
+            if path.extension().is_none_or(|e| e != "rs")
+                || name.ends_with("tests.rs")
+                || name.ends_with("_probe.rs")
+            {
                 continue;
             }
             let text = std::fs::read_to_string(&path).unwrap();

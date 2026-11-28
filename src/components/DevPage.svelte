@@ -7,6 +7,7 @@
   // then the system's browser; drawn with the app's controls (`icon-btn`, `btn`, `segmented small`, `field`).
   import { onDestroy, onMount } from 'svelte';
   import {
+    answerConsent,
     besideOf,
     boundsOf,
     coveredAt,
@@ -20,6 +21,8 @@
     openPageBeside,
     pageItem,
     place,
+    loadConsents,
+    placementOf,
     setMode,
   } from '../lib/devpage.svelte';
   import { DEVICE_WIDTH, deviceFit, modeKey, PAGE_MODES, typedAddress, type PageMode } from '../lib/devpage-key';
@@ -33,6 +36,10 @@
   import { app } from '../lib/state.svelte';
   import { anyRunning, flows, testAgent } from '../lib/test-launch.svelte';
   import { tip } from '../lib/tip';
+  import ConsentBand from './ConsentBand.svelte';
+  import DriveBand from './DriveBand.svelte';
+  import PasswordBand from './PasswordBand.svelte';
+  import { answerPassword, driveOf, moveHand } from '../lib/drives.svelte';
   import Icon from './Icon.svelte';
 
   /** The browser's key: its agent's id, or `browser:<id>` for one opened alone. */
@@ -45,6 +52,9 @@
   const ownPane = $derived(pane?.key === `page:${key}`);
 
   const page = $derived(devpages.pages[key]);
+  /** Its driving (AB-8): while an agent drives it, the band says so, always. */
+  const drive = $derived(driveOf(key));
+  const driverName = $derived(drive?.agent ? (app.agents[drive.agent]?.name ?? drive.agent) : '');
   /** The agent whose launch opened it, if one did. */
   const agent = $derived(page?.by.kind === 'agent' ? app.agents[page.by.id] : undefined);
   const flow = $derived(agent ? flows.all[agent.id] : undefined);
@@ -85,11 +95,13 @@
       const f = deviceFit(mode, rect.width);
       const shown = { left: rect.left + f.left, top: rect.top, width: f.width, height: rect.height } as DOMRect;
       const bounds = show ? boundsOf(shown, zoomState.shown) : null;
+      // Alone, or in a pane beside or under something else (`list_browsers`, ESC-669).
+      const where = placementOf(ownPane, rect, room.closest('.work')?.getBoundingClientRect());
       // Only what changed goes to the backend: the observers below fire far more often than the page moves.
-      const said = JSON.stringify(bounds);
+      const said = JSON.stringify([bounds, where]);
       if (said === placed) return;
       placed = said;
-      void place(key, bounds);
+      void place(key, bounds, where);
     });
   }
   /** The last place told to the backend. */
@@ -97,7 +109,7 @@
 
   $effect(() => {
     // Again whenever what it hangs on changes.
-    void [visible, zoomState.shown, page?.phase, mode, paneDrag.on];
+    void [visible, zoomState.shown, page?.phase, mode, paneDrag.on, !!drive, drive?.passwordAsks.length, drive?.stopped];
     sync();
   });
 
@@ -114,6 +126,8 @@
     overlays = new MutationObserver(sync);
     overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
     window.addEventListener('resize', sync);
+    // Its band as the backend keeps it: a request may have come while it was elsewhere.
+    void loadConsents(key);
   });
   onDestroy(() => {
     cancelAnimationFrame(frame);
@@ -294,6 +308,24 @@
       </div>
     </div>
     {#if page.phase === 'loading' && !waiting && !stopped}<div class="load" aria-hidden="true"></div>{/if}
+    <!-- An agent asks to read this page, outside its project's launch (ESC-669): native, above the page. -->
+    <ConsentBand asks={page.consents?.asks ?? []} onanswer={(ask, allow) => answerConsent(key, ask, allow)} />
+    <!-- An agent asks to fill a password on the launch (C2): native, above the page. -->
+    <PasswordBand asks={drive?.passwordAsks ?? []} onanswer={(agent, allow) => answerPassword(key, agent, allow)} />
+    <!-- The driving band (AB-8): native, above the page and out of its webview, while an agent drives it. -->
+    {#if drive}
+      <DriveBand
+        agent={driverName}
+        hand={drive.hand}
+        step={drive.step || null}
+        last={drive.what}
+        waiting={drive.waiting}
+        stopped={drive.stopped}
+        ontake={() => moveHand(key, 'take')}
+        ongive={() => moveHand(key, 'give')}
+        oncontinue={() => moveHand(key, 'continue')}
+      />
+    {/if}
   {/if}
 
   <div class="room" bind:this={room} class:on={visible} class:device={mode !== 'full' && visible}>

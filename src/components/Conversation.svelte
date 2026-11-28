@@ -44,7 +44,8 @@
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
-  import { devpages, inPane as pageInPane, pageItem, showPage } from '../lib/devpage.svelte';
+  import { answerOpen, devpages, inPane as pageInPane, openAsksOf, pageItem, showPage } from '../lib/devpage.svelte';
+  import OpenAskBand from './OpenAskBand.svelte';
   import Composer from './Composer.svelte';
   import PlanBanner from './PlanBanner.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
@@ -54,6 +55,10 @@
   import PermissionCard from './conv/PermissionCard.svelte';
   import QuestionCard from './conv/QuestionCard.svelte';
   import SentFiles from './conv/SentFiles.svelte';
+  import PageCard from './conv/PageCard.svelte';
+  import { pageCall } from '../lib/agentpages.svelte';
+  import DriveRow from './conv/DriveRow.svelte';
+  import { driveCall } from '../lib/drives.svelte';
   import SetupProgress from './conv/SetupProgress.svelte';
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
@@ -119,11 +124,9 @@
     const track = workflows.tracks[project.id]?.[agent.id];
     return track ? stepDividers(top, track.passages, workflows.scans[project.id]?.workflows ?? []) : new Map();
   });
-  /** The Workflow tab, on the workflow of the divider. */
+  /** The diagram of the divider's workflow with the agent's path, over the « Workspace » (ESC-689). */
   function openWorkflow(workflow: string) {
-    workflows.chosen[project.id] = workflow;
-    app.panelTab = 'workflow';
-    if (!docked) app.filesOpen = true;
+    app.openWorkflowDiagram(project.id, workflow, agent.id);
   }
   // The next slice: what « Afficher les N précédents » adds.
   const older = $derived(Math.min(SLICE, start));
@@ -980,6 +983,12 @@
                 <Thinking {item} />
               {:else if item.kind === 'tool' && item.name === 'SendUserFile' && !item.parent}
                 <SentFiles {item} agentId={agent.id} engine={agent.engine} />
+              {:else if item.kind === 'tool' && !item.parent && pageCall(item)}
+                <!-- A page the agent showed (show_page, AP-3): its card, not its call's row; a failed call keeps its row. -->
+                <PageCard {item} {agent} />
+              {:else if item.kind === 'tool' && !item.parent && driveCall(item)}
+                <!-- A gesture of the agent's on a browser (drive_browser, AB-8): its numbered row; a failed call keeps its row. -->
+                <DriveRow {item} linked={nextIsTool(j)} />
               {:else if item.kind === 'tool'}
                 <ToolRow
                   {item}
@@ -1067,6 +1076,7 @@
       {@render harnessCard()}
       {@render codeModeBand()}
       {@render nextStart()}
+      <OpenAskBand asks={openAsksOf(agent.id)} onanswer={answerOpen} />
       <Composer {agent} />
     {/if}
   {/if}

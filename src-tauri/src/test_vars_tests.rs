@@ -25,7 +25,7 @@ const NOT_OF_TESTS: &[(&str, &str)] = &[
     ),
     (
         "ESCOUADE_CONNECTOR_CONFIG",
-        "where `escouade-connector` reads its connector.toml (ESC-599), as its `--config` says it",
+        "the configuration file of `escouade-connector` (RP-3, ESC-599), as its `--config`, documented in its help",
     ),
 ];
 

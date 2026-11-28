@@ -2,6 +2,9 @@
 //! stream) and the plan files it follows (`planfiles`: superpowers' plans and ledgers, read from its folder). Cut out of
 //! the app's crate for it to compile faster (docs/CRATES.md): the app names them `crate::plan` and `crate::planfiles`.
 
+pub mod canvas;
+#[cfg(test)]
+mod canvas_tests;
 pub mod plan;
 #[cfg(test)]
 mod plan_later_tests;

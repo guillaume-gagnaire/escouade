@@ -999,6 +999,25 @@ impl Drop for WorkingOwned {
     }
 }
 
+/// What the passes of « Mettre à jour tout seuls » keep while the app runs (ESC-700).
+#[derive(Default)]
+pub(crate) struct PluginsAuto {
+    /// One pass at a time.
+    running: tokio::sync::Mutex<()>,
+    /// The versions tried by themselves since the start: never tried again, an error does not loop.
+    tried: Mutex<std::collections::HashSet<(String, String)>>,
+    /// A plugin waits for the end of a turn of its harness.
+    waiting: std::sync::atomic::AtomicBool,
+    /// The updates by themselves that failed, the last of each plugin.
+    failed: Mutex<Vec<crate::plugins::auto::AutoFailed>>,
+}
+
+/// The runtime of the desktop's webviews the core reaches (`Core::app`, ESC-701): Wry, or the mock of the tests.
+#[cfg(all(feature = "desktop", not(test)))]
+pub type Rt = tauri::Wry;
+#[cfg(all(feature = "desktop", test))]
+pub type Rt = tauri::test::MockRuntime;
+
 pub struct Core {
     /// Itself, for what runs in the background from a method that only has `&self`.
     me: std::sync::Weak<Self>,
@@ -1062,6 +1081,8 @@ pub struct Core {
     pub plugins: Arc<crate::plugins::Plugins>,
     /// The store in the app (STORE-9): its catalogue and its revocation list, cached.
     pub store: Arc<crate::plugins::store::Store>,
+    /// « Mettre à jour tout seuls » (ESC-700): what its passes keep while the app runs (`auto_update_plugins`).
+    pub(crate) plugins_auto: PluginsAuto,
     /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
     pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
     /// The launch environments of the plugins the app gives (INT-14): isola runs a worktree's services.
@@ -1113,6 +1134,8 @@ pub struct Core {
     pub(crate) overseer: crate::overseer_core::Hub,
     /// The agents' asynchronous requests (« À toi », ESC-509): `asks`.
     pub(crate) asks: Mutex<crate::asks::AskBox>,
+    /// The agents' pages (ESC-673): their registry, and their rows of « Navigateurs » for this run (`pages`).
+    pub(crate) pages: Mutex<crate::pages::PageBox>,
     /// « Plus tard » on the views of the box (ESC-513, `inboxviews`).
     pub(crate) inbox_snoozes: Mutex<crate::inboxviews::ViewSnoozes>,
     /// What the summary of the box last told (ESC-513, `inboxnotify`).
@@ -1906,6 +1929,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflows_in_repo: true,
         memory_review_off: false,
         parts: Default::default(),
+        custom_page: String::new(),
+        file_custom_page: String::new(),
         agent_folders: Vec::new(),
         agent_order: Vec::new(),
     }
@@ -2021,6 +2046,54 @@ fn below_root(root: &str, path: &str) -> Option<String> {
 }
 
 impl Core {
+    /// The desktop app's handle (ESC-701, in place of the `app` of the 2.2 line's core): the window's webviews, its
+    /// states (the browsers' `Pages`, the pages' `Shelter`). None without a window (`HeadlessHost`), or for a host of
+    /// another runtime.
+    #[cfg(feature = "desktop")]
+    pub fn app(&self) -> Option<&tauri::AppHandle<Rt>> {
+        self.host.desktop()?.downcast_ref::<tauri::AppHandle<Rt>>()
+    }
+
+    /// The window's shelter of the agents' pages (ESC-667): none without a window (`escouade-server`), or in a test that
+    /// made none.
+    #[cfg(feature = "desktop")]
+    pub(crate) fn shelter(&self) -> Option<Arc<crate::agentpage::Shelter>> {
+        use tauri::Manager;
+        self.app()
+            .and_then(|a| a.try_state::<Arc<crate::agentpage::Shelter>>())
+            .map(|s| s.inner().clone())
+    }
+
+    #[cfg(not(feature = "desktop"))]
+    pub(crate) fn shelter(&self) -> Option<Arc<crate::agentpage::Shelter>> {
+        None
+    }
+
+    /// The window's browsers (`devpage::Pages`, ESC-657): none without a window, or in a test that made none.
+    #[cfg(feature = "desktop")]
+    pub(crate) fn browsers(&self) -> Option<Arc<crate::devpage::Pages>> {
+        use tauri::Manager;
+        self.app()
+            .and_then(|a| a.try_state::<Arc<crate::devpage::Pages>>())
+            .map(|s| s.inner().clone())
+    }
+
+    #[cfg(not(feature = "desktop"))]
+    pub(crate) fn browsers(&self) -> Option<Arc<crate::devpage::Pages>> {
+        None
+    }
+
+    /// Whether an address is Escouade's own, never loaded in a page (`devpage::own_of`); without a window, none is.
+    pub fn own_of(&self) -> crate::devpage::Own {
+        #[cfg(feature = "desktop")]
+        if let Some(app) = self.app() {
+            return crate::devpage::own_of(app);
+        }
+        Arc::new(|_: &tauri::Url| false)
+    }
+}
+
+impl Core {
     /// The voice services in line with the plugins that serve them (INT-13): each module starts at its first call.
     pub(crate) fn sync_voice_plugins(&self) {
         crate::voice::plugin_host::sync_builtin(&self.plugin_runtime, &self.plugins);
@@ -2043,6 +2116,137 @@ impl Core {
         self.plugins
             .apply_store(self.store.revocations(), self.store.offers());
         self.send_seed_counts().await;
+        // At the start and every 6 hours, once the catalogue and the revocation list are read (ESC-700).
+        self.auto_update_plugins().await;
+    }
+
+    /// « Mettre à jour tout seuls » (ESC-700): after each search of the updates, the updates offered that the window for
+    /// all of « Tout mettre à jour » would agree to install by themselves (`escouade_plugins::auto`), as a gesture would:
+    /// the plugin stopped then started again, counted on the store with the consent to the statistics. A plugin whose
+    /// harness has an agent in its turn waits for the end of that turn (`apply`); an error leaves the version installed,
+    /// is said on the page Mises à jour, and that version is not tried again until the next start. Nothing when the store
+    /// was not read now (its revocation list first): the updates stay offered.
+    pub async fn auto_update_plugins(&self) {
+        let settings = self.settings.read().clone();
+        if settings.plugins_auto_update == PluginsAutoUpdate::Never
+            || !crate::offline::allows(crate::offline::Flow::Updates)
+        {
+            return;
+        }
+        let Ok(_one) = self.plugins_auto.running.try_lock() else {
+            return;
+        };
+        if self.store.view().error.is_some() {
+            return;
+        }
+        let Ok(http) = crate::plugins::store::client(&settings) else {
+            return;
+        };
+        let lang = crate::i18n::ui();
+        let busy = |p: &crate::plugins::PluginView| {
+            crate::plugins::auto::serves(p, &self.engines_in_turn())
+        };
+        let install = |token: &str| -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+            let view = self.install_plugin(token, lang)?;
+            self.plugin_runtime.prepare(&view.id);
+            self.count_plugin_install(&view, true);
+            Ok(view)
+        };
+        let report = self
+            .plugins
+            .auto_update(
+                &self.store,
+                &http,
+                settings.plugins_auto_update,
+                &busy,
+                &self.plugins_auto.tried,
+                &install,
+                lang,
+            )
+            .await;
+        self.plugins_auto.waiting.store(
+            !report.waiting.is_empty(),
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        {
+            let mut failed = self.plugins_auto.failed.lock();
+            let done: Vec<&str> = report
+                .installed
+                .iter()
+                .map(|(v, _)| v.id.as_str())
+                .collect();
+            failed.retain(|f| {
+                !done.contains(&f.id.as_str()) && !report.failed.iter().any(|n| n.id == f.id)
+            });
+            failed.extend(report.failed.iter().cloned());
+        }
+        for f in &report.failed {
+            log::warn!(
+                "plugin {} v{}: not updated by itself: {}",
+                f.id,
+                f.version,
+                f.message
+            );
+        }
+        for (view, from) in &report.installed {
+            log::info!(
+                "plugin {}: updated by itself, v{from} → v{}",
+                view.id,
+                view.version
+            );
+        }
+        if !report.installed.is_empty() {
+            self.sync_voice_plugins();
+        }
+        if !report.installed.is_empty() || !report.failed.is_empty() {
+            self.hub.emit(UiEvent::PluginsAutoUpdated);
+        }
+    }
+
+    /// The harnesses an agent is in its turn on (running, or waiting for an answer within its turn).
+    pub(crate) fn engines_in_turn(&self) -> Vec<String> {
+        let handles: Vec<AgentHandle> = self.agents.read().values().cloned().collect();
+        handles
+            .iter()
+            .filter_map(|h| {
+                let rt = h.lock();
+                rt.meta
+                    .status
+                    .is_active()
+                    .then(|| rt.meta.engine.as_str().to_string())
+            })
+            .collect()
+    }
+
+    /// The updates by themselves that failed since the start (ESC-700): said on the page Mises à jour.
+    pub fn plugins_auto_failed(&self) -> Vec<crate::plugins::auto::AutoFailed> {
+        self.plugins_auto.failed.lock().clone()
+    }
+
+    /// An install of the store counted on the store, only with the user's consent to the statistics (docs/STORE.md §5.4),
+    /// `update` for an update; a version of the seed through the counts the seed keeps, once (ESC-394). The same for an
+    /// install by a gesture and an update by itself (ESC-700).
+    pub(crate) fn count_plugin_install(&self, view: &crate::plugins::PluginView, update: bool) {
+        let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+        let from_seed = matches!(
+            view.origin,
+            crate::plugins::Origin::Store { seed: true, .. }
+        );
+        self.track(crate::telemetry::Event::PluginInstalled { from_store });
+        if from_seed {
+            self.spawn_seed_counts();
+        } else if from_store
+            && self.settings.read().telemetry == Some(true)
+            && crate::offline::allows(crate::offline::Flow::Statistics)
+        {
+            let settings = self.settings.read().clone();
+            let (store, id, version) = (self.store.clone(), view.id.clone(), view.version.clone());
+            tauri::async_runtime::spawn(async move {
+                if let Ok(http) = crate::plugins::store::client(&settings) {
+                    store.count(&http, &id, &version, update).await;
+                }
+            });
+        }
     }
 
     /// « Rechercher des mises à jour » (ESC-405): the store read again (a reading under way or of less than 30 s taken as it
@@ -2169,6 +2373,11 @@ impl Core {
         let asks = crate::asks::AskBox {
             list: std::mem::take(&mut state.asks),
             seq: state.ask_seq,
+        };
+        let pages = crate::pages::PageBox {
+            list: std::mem::take(&mut state.pages),
+            seq: state.page_seq,
+            ..Default::default()
         };
         let inbox_snoozes = crate::inboxviews::ViewSnoozes {
             until: std::mem::take(&mut state.inbox_snoozes),
@@ -2372,6 +2581,7 @@ impl Core {
             plugin_events,
             plugins,
             store,
+            plugins_auto: PluginsAuto::default(),
             host,
             data,
             hub: Hub::default(),
@@ -2433,6 +2643,7 @@ impl Core {
             schedule_clock: crate::scheduled::Clock::from_env(),
             overseer,
             asks: Mutex::new(asks),
+            pages: Mutex::new(pages),
             inbox_snoozes: Mutex::new(inbox_snoozes),
             inbox_summary: Mutex::default(),
             create_lock: tokio::sync::Mutex::new(()),
@@ -2788,7 +2999,12 @@ impl Core {
         }
         let installed = self.plugins.install(token, lang);
         match (&installed, staged) {
-            (Ok(view), _) => self.plugin_changed(&view.id),
+            (Ok(view), _) => {
+                self.plugin_changed(&view.id);
+                // The harnesses it describes as it is now, at once: a start reads the line of the plugin installed at
+                // its launch, never one an update replaced (SEC-01, ESC-697).
+                self.sync_harnesses();
+            }
             // Refused: the version it had stays, and starts again if it decides.
             (Err(_), Some((id, _))) => self.plugin_changed(&id),
             (Err(_), None) => {}
@@ -2815,6 +3031,8 @@ impl Core {
         }
         // The box « À toi » as the stop left it: what came due meanwhile (ESC-509).
         self.asks_sweep();
+        // The agents' pages whose agent or project went meanwhile (ESC-673).
+        self.pages_sweep();
         // The plugins that decide run before the first permission asked (PLG-8).
         crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
@@ -2927,6 +3145,7 @@ impl Core {
                 // The box « À toi »: requests back from « Plus tard », past their date or taken out, and
                 // answers whose 10 seconds were cut by a stop (ESC-509).
                 c.asks_sweep();
+                c.pages_sweep();
                 c.deliver_answers().await;
                 // Its summary, when requests came and its time did (ESC-513).
                 c.inbox_summary_tick();
@@ -3027,6 +3246,10 @@ impl Core {
             let b = self.asks.lock();
             (b.list.clone(), b.seq)
         };
+        let (pages, page_seq) = {
+            let b = self.pages.lock();
+            (b.list.clone(), b.seq)
+        };
         let (inbox_snoozes, inbox_marks) = {
             let s = self.inbox_snoozes.lock();
             (s.until.clone(), s.marks.clone())
@@ -3049,6 +3272,8 @@ impl Core {
             ask_seq,
             inbox_snoozes,
             inbox_marks,
+            pages,
+            page_seq,
         }
     }
 
@@ -3259,6 +3484,10 @@ impl Core {
         if telemetry.is_some() && before_settings.telemetry != telemetry {
             // The installs of the seed waiting for the answer: sent on a yes, forgotten on a no (ESC-394).
             self.spawn_seed_counts();
+        }
+        if (before_settings.agent_pages && !self.pages_on()) || (mcp_was_enabled && !mcp_enabled) {
+            // « Pages des agents » (or the server) turned off: the pages' rows close; nothing is erased (ESC-673).
+            self.pages_close_rows();
         }
         if mcp_was_enabled && !mcp_enabled {
             // « Claude et les agents peuvent piloter Escouade » turned off: the token changes at once, and its entry
@@ -3623,6 +3852,16 @@ impl Core {
             // just have passed « Changer de compte à » (ESC-148).
             self.switch_soon(id);
         }
+        // A turn over: an update by itself that waited for it goes now (ESC-700).
+        if fx.turn_end.is_some()
+            && self
+                .plugins_auto
+                .waiting
+                .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move { c.auto_update_plugins().await });
+        }
         let limited = fx.limited.is_some();
         if let Some(resets_at) = fx.limited {
             self.plan_resume(id, resets_at);
@@ -3677,6 +3916,10 @@ impl Core {
         }
         if fx.plan_files {
             self.ask_plan_scan(id);
+        }
+        // A new version of an artifact it published: the tabs it opened on it reload (AB-10).
+        for (address, version) in &fx.published {
+            crate::mcp::browsers_drive::artifact_published(self, id, address, *version);
         }
         for (item, input) in fx.sent {
             self.deliver_sent(id, item, input);
@@ -9188,6 +9431,8 @@ impl Core {
         self.forget_interface(&meta);
         // The files joined to its messages (the copies; never a file of the user's own).
         self.forget_attachments(id);
+        // Its captures of the browsers (`capture_browser`, ESC-670).
+        let _ = std::fs::remove_dir_all(self.data.captures(id));
         self.forget_sidechains(id);
         self.with_every_ui(|ui| {
             if ui.selected_agent.get(&pid).map(String::as_str) == Some(id) {
@@ -9862,6 +10107,9 @@ impl Core {
             crate::testlaunch::check_run_url(&c.url, crate::i18n::ui())
                 .map_err(|e| anyhow::anyhow!("« {} » : {e}", c.name.trim()))?;
         }
+        // « Page à soi » (AP-7): an .html document, or none.
+        let custom_page = crate::pages::checked_custom_page(crate::i18n::ui(), &p.custom_page)
+            .map_err(anyhow::Error::msg)?;
         let mut projects = self.projects.write();
         let cur = projects
             .iter_mut()
@@ -9889,6 +10137,8 @@ impl Core {
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
         cur.pages_open = p.pages_open;
+        // « Page à soi » (AP-7): the window's alone; `file_custom_page` is the file's, never the window's.
+        cur.custom_page = custom_page;
         cur.account = account;
         cur.engine = p.engine;
         // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`), the

@@ -4,6 +4,8 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { devpages, type PageState } from '../lib/devpage.svelte';
+import { drives } from '../lib/drives.svelte';
+import type { DriveView } from '../lib/types';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
@@ -158,5 +160,114 @@ describe('the section « Navigateurs »', () => {
     expect(screen.getByRole('region', { name: 'Browsers' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'New browser' })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Close the browser' })).toHaveLength(3);
+  });
+});
+
+describe('an agent’s page in « Navigateurs » (AP-3)', () => {
+  it('is a row with the page’s icon, its title, its last version; its point while it waits; its menu and its × close its row alone', async () => {
+    const { agentpages } = await import('../lib/agentpages.svelte');
+    agentpages.info = {
+      'p-12': {
+        page: 'p-12',
+        projectId: 'p1',
+        agentId: 'a7',
+        agentName: 'pagination-users',
+        ticketId: null,
+        title: 'Revue avant fusion',
+        template: 'review',
+        versions: [
+          { n: 1, at: 0 },
+          { n: 2, at: 1 },
+        ],
+        shown: 2,
+        open: true,
+        quiet: false,
+        loaded: true,
+      },
+    };
+    devpages.pages = {
+      'page:p-12': page({ url: '', title: 'Revue avant fusion', by: { kind: 'page', id: 'a7', page: 'p-12' }, unseen: true, opened: 5 }),
+    };
+    const b = fakeBackend();
+    render(BrowsersSection, { project: project() });
+    const r = rows()[0];
+    expect(r.querySelector('.nm')?.textContent).toBe('Revue avant fusion');
+    expect(r.querySelector('.d')).toBeNull();
+    expect(r.querySelector('.pg.unseen')).toBeTruthy();
+    expect(r.querySelector('[data-testid="page-row-version"]')?.textContent).toBe('v2');
+    expect(r.textContent).toContain('Nouvelle page : elle attend que tu l’ouvres');
+    await fireEvent.contextMenu(r);
+    expect(menu.open?.items.filter((i) => !i.separator).map((i) => i.label)).toEqual([
+      'Ouvrir à côté',
+      'Ouvrir en dessous',
+      'Fermer la page (elle reste gardée)',
+    ]);
+    await fireEvent.click(within(r).getByRole('button', { name: 'Fermer la page (elle reste gardée)' }));
+    expect(b.called('agentpage_close_row')).toEqual([{ cmd: 'agentpage_close_row', args: { page: 'p-12' } }]);
+    expect(b.called('devpage_close')).toEqual([]);
+    await tick();
+    expect(rows()).toEqual([]);
+  });
+});
+
+describe('a row an agent drives (AB-8, ESC-680)', () => {
+  const driving = (over: Partial<DriveView> = {}): DriveView => ({
+    browser: 'a7',
+    agent: 'a7',
+    hand: 'agent',
+    stopped: false,
+    step: 2,
+    what: 'Clique « Suivant »',
+    waiting: false,
+    passwordAsks: [],
+    pins: [],
+    ...over,
+  });
+  beforeEach(() => {
+    drives.rows = {};
+  });
+
+  it('shows the agent’s initials before the name and says who drives, to the eye and to a screen reader', async () => {
+    fakeBackend();
+    drives.rows.a7 = driving();
+    render(BrowsersSection, { project: project() });
+    const row = rows()[1];
+    expect(row.getAttribute('data-driven')).toBe('agent');
+    expect(row.classList.contains('driven')).toBe(true);
+    expect(row.querySelector('[data-testid="driven-avatar"]')?.textContent).toBe('PU');
+    expect(row.textContent).toContain('Piloté par pagination-users');
+    // The others are not driven.
+    expect(rows()[0].getAttribute('data-driven')).toBeNull();
+    // The user took the hand: the avatar stays, held.
+    drives.rows.a7 = driving({ hand: 'user' });
+    await tick();
+    expect(row.getAttribute('data-driven')).toBe('user');
+    expect(row.querySelector('[data-testid="driven-avatar"]')?.classList.contains('held')).toBe(true);
+    expect(row.textContent).toContain('Tu as repris la main sur pagination-users');
+  });
+
+  it('offers « Reprendre la main » (or « La rendre ») and « Ne plus laisser piloter » in its menu, sent to the core', async () => {
+    const b = fakeBackend({
+      browser_drive_hand: (a: { hand: string }) => driving({ hand: a.hand === 'give' ? 'agent' : 'user', stopped: a.hand === 'stop' }),
+    });
+    drives.rows.a7 = driving();
+    render(BrowsersSection, { project: project() });
+    await fireEvent.contextMenu(rows()[1]);
+    const labels = menu.open?.items.filter((i) => !i.separator).map((i) => i.label) ?? [];
+    expect(labels.slice(2, 4)).toEqual(['Reprendre la main', 'Ne plus laisser piloter']);
+    menu.open?.items.find((i) => i.label === 'Reprendre la main')?.onClick?.();
+    // The core answers: the hand is the user’s.
+    await vi.waitFor(() => expect(drives.rows.a7.hand).toBe('user'));
+    await fireEvent.contextMenu(rows()[1]);
+    expect(menu.open?.items.some((i) => i.label === 'La rendre')).toBe(true);
+    menu.open?.items.find((i) => i.label === 'Ne plus laisser piloter')?.onClick?.();
+    expect(b.called('browser_drive_hand').map((c) => c.args.hand)).toEqual(['take', 'stop']);
+    await new Promise((r) => setTimeout(r, 0));
+    // Stopped: the moves go from its menu.
+    drives.rows.a7 = driving({ hand: 'user', stopped: true });
+    await tick();
+    await fireEvent.contextMenu(rows()[1]);
+    expect(menu.open?.items.some((i) => i.label === 'La rendre' || i.label === 'Reprendre la main')).toBe(false);
+    expect(rows()[1].textContent).toContain('Pilotage arrêté');
   });
 });
