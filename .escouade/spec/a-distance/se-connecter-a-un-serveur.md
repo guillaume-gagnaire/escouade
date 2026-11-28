@@ -1,9 +1,9 @@
 ---
 title: "Se connecter à un serveur"
 subject: "a-distance"
-sources: ["docs/SERVER-UX.md (§ 2 le parcours, § 3 la connexion et ses états, § 4 dire sur quelle machine on est, § 7 S1, S4, S10, S11, S15, § 9, § 10, § 11)","design/server-2-3 (maquettes et captures : x-hote, b-connexion, b-erreur, b-coupure, x-etats, x-version, x-jeton, b-deux)","docs/REMOTE.md, « Le mode serveur », « Le tunnel : SSH d'abord », « Le client, MS-3 (ESC-537) »","src-tauri/src/servers (mod.rs, sshconfig.rs, tunnel.rs, client.rs)","src-tauri/src/remoteapi (proto.rs, server.rs, devices.rs, pairing.rs)","src/lib/transport.ts, src/lib/servers.svelte.ts, src/components/servers","tests/fixtures/fake-ssh.mjs, tests/e2e/server-connect.spec.ts, src-tauri/src/servers_tests.rs","crates/escouade-model/src/job.rs (le job des tunnels, ESC-541)"]
-tickets: ["ESC-537","ESC-539","ESC-541","ESC-654"]
-decisions: [212,218,220,289]
+sources: ["docs/SERVER-UX.md (§ 2 le parcours, § 3 la connexion et ses états, § 4 dire sur quelle machine on est, § 7 S1, S4, S10, S11, S15, § 9, § 10, § 11)","design/server-2-3 (maquettes et captures : x-hote, b-connexion, b-erreur, b-coupure, x-etats, x-version, x-jeton, b-deux)","docs/REMOTE.md, « Le mode serveur », « Le tunnel : SSH d'abord », « Le client, MS-3 (ESC-537) », « La socket Unix, BC-5 (ESC-706) »","docs/BROWSER-CLIENT-STUDY.md, § 4 (ESC-655, choix B3)","src-tauri/src/servers (mod.rs, sshconfig.rs, tunnel.rs, client.rs)","src-tauri/src/remoteapi (proto.rs, server.rs, devices.rs, pairing.rs)","src/lib/transport.ts, src/lib/servers.svelte.ts, src/components/servers","tests/fixtures/fake-ssh.mjs, tests/e2e/server-connect.spec.ts, src-tauri/src/servers_tests.rs","crates/escouade-model/src/job.rs (le job des tunnels, ESC-541)"]
+tickets: ["ESC-537","ESC-539","ESC-541","ESC-654","ESC-706"]
+decisions: [212,218,220,289,355,379]
 compared: null
 ---
 
@@ -19,22 +19,24 @@ Le client de bureau pilote un Escouade qui tourne sur un serveur (voir *Le mode 
 
 Quatre étapes, à gauche : **Hôte SSH**, **Connexion**, **Appairage**, **L'espace**. Une étape réussie est cochée, une étape en échec est en rouge.
 
-1. **L'hôte SSH** : les hôtes de `~/.ssh/config`, avec ce qu'ils visent (`utilisateur@adresse · port`, « par bastion (ProxyJump) ») ; ou un hôte tapé, `utilisateur@adresse:port`. Les hôtes à motif (`Host *`) et ceux sans `HostName` ne sont pas listés. Le « Port d'Escouade sur le serveur » vaut 46480. La config est lue avec ses `Include` (relatifs à `~/.ssh`, avec `*` et `?`), la première valeur donnée pour un hôte l'emporte, les blocs `Match` sont ignorés. Un hôte tapé qui commence par `-` ou contient un caractère de shell est refusé.
-2. **La connexion** : la stratégie du poste d'abord (`servers.allowed`), puis le tunnel, puis la poignée de main sans jeton (Escouade répond ? dans quelle version ?).
+1. **L'hôte SSH** : les hôtes de `~/.ssh/config`, avec ce qu'ils visent (`utilisateur@adresse · port`, « par bastion (ProxyJump) ») ; ou un hôte tapé, `utilisateur@adresse:port`. Les hôtes à motif (`Host *`) et ceux sans `HostName` ne sont pas listés. Le « Port d'Escouade sur le serveur » vaut 46480 ; ne le changer que pour un serveur sur un autre `--port`. La config est lue avec ses `Include` (relatifs à `~/.ssh`, avec `*` et `?`), la première valeur donnée pour un hôte l'emporte, les blocs `Match` sont ignorés. Un hôte tapé qui commence par `-` ou contient un caractère de shell est refusé.
+2. **La connexion** : la stratégie du poste d'abord (`servers.allowed`), puis **où écoute le serveur**, lu par SSH (voir *Le tunnel*), puis le tunnel, puis la poignée de main sans jeton (Escouade répond ? dans quelle version ?).
 3. **L'appairage**, la première fois : « Sur le serveur, lance `escouade-server pair` » (copiable), **ou « le lancer d'ici par SSH »**, qui lance `escouade-server pair` par le même hôte (cherché dans le `PATH`, `~/.local/bin`, `/usr/local/bin`, `/opt/escouade`) et remplit le code. Le code a huit cases (un `group` « Code d'appairage, 8 caractères ») : chaque lettre passe à la case suivante, un collage entier les remplit, `Retour arrière` revient en arrière, une lettre qui ne peut pas être d'un code (0, O, 1, I) n'est pas prise. Puis le nom de l'espace (pris de l'alias SSH, modifiable) et le nom de ce poste vu du serveur (« DESKTOP-7QK2 · Windows »).
 4. **L'espace** : la fenêtre passe sur le serveur.
 
 ## Le tunnel
 
-- Le `ssh` du système (sous Windows, OpenSSH de `System32`, sans console) : `ssh -N -L 127.0.0.1:<port local libre>:127.0.0.1:<port du serveur> <hôte>`, avec la config, l'agent et les `known_hosts` de l'utilisateur. **Escouade ne lit, ne copie ni ne garde aucune clé.**
-- **Jamais une clé d'hôte acceptée à la place de l'utilisateur** : `BatchMode=yes` et `StrictHostKeyChecking=yes` sont donnés sur la ligne de commande, qui l'emporte sur la config. Aucun mot de passe n'est tapé.
+- **Où écoute le serveur** (ESC-706) : sans port tapé, le client lance d'abord par le même hôte `escouade-server status --json` (cherché comme `pair`) et en lit la socket du serveur ; **jamais devinée** (`%t` dépend de l'uid du serveur). Un chemin que `-L` ne lirait pas (relatif, un deux-points, un espace, un caractère de contrôle, trop long), un serveur arrêté, sur un port ou trop ancien pour `status` : le port. Un échec de SSH lui-même (une clé d'hôte, un compte refusé, un hôte injoignable) est dit comme le tunnel le dirait. Un port tapé est pris tel quel, sans rien lire.
+- Le `ssh` du système (sous Windows, OpenSSH de `System32`, sans console) : `ssh -N -L 127.0.0.1:<port local libre>:<socket du serveur> <hôte>` vers une socket, `ssh -N -L 127.0.0.1:<port local libre>:127.0.0.1:<port du serveur> <hôte>` vers un port, avec la config, l'agent et les `known_hosts` de l'utilisateur. **Escouade ne lit, ne copie ni ne garde aucune clé.**
+- **Jamais une clé d'hôte acceptée à la place de l'utilisateur** : `BatchMode=yes` et `StrictHostKeyChecking=yes` sont donnés sur la ligne de commande, qui l'emporte sur la config. Aucun mot de passe n'est tapé. Les mêmes options valent vers une socket.
 - **Rien n'écoute ailleurs que sur 127.0.0.1 de ce poste.** Rien n'est envoyé au port local avant que `ssh` dise que la redirection écoute.
-- **Surveillé** : sa sortie est lue ; tombé, il est relancé aux délais de la fenêtre (250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s), sur le même port local s'il est libre ; une fin que réessayer ne répare pas (une clé, un compte refusé) l'arrête et le dit. Il s'arrête avec l'app. **Chaque serveur connu garde le sien**, ouvert au démarrage de l'app, avec ses propres essais ; aller sur ce poste ne le ferme pas (voir *Les espaces*).
-- **Aucun tunnel ne survit à ce qui l'a ouvert** : `ssh` et ce qu'il lance (un `ProxyCommand`) tournent dans un job (un Job object sous Windows, un groupe de process ailleurs), le tunnel de chaque serveur comme chaque port relayé. Ils s'arrêtent ensemble, tout de suite : quand le dialogue se ferme, quand un serveur est retiré, quand la fenêtre quitte le serveur (ses ports relayés), quand ce qui les tient disparaît sans les arrêter, et quand l'app quitte, même pour une mise à jour. Sous Windows, le système arrête aussi le job quand l'app finit sans s'arrêter proprement (plantage, process tué). Le `ssh` qui lance `escouade-server pair` suit la même règle.
+- **Le serveur garde sa socket** : la liste des serveurs connus garde le chemin de la socket à côté du port. Quand rien ne répond là en ouvrant l'espace (« Pas d'Escouade »), le client relit une fois où écoute le serveur (il a pu être réinstallé sur l'autre) et réessaie.
+- **Surveillé** : sa sortie est lue ; tombé, il est relancé aux délais de la fenêtre (250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s), sur le même port local s'il est libre ; une fin que réessayer ne répare pas (une clé, un compte refusé, une redirection refusée) l'arrête et le dit. Il s'arrête avec l'app. **Chaque serveur connu garde le sien**, ouvert au démarrage de l'app, avec ses propres essais ; aller sur ce poste ne le ferme pas (voir *Les espaces*).
+- **Aucun tunnel ne survit à ce qui l'a ouvert** : `ssh` et ce qu'il lance (un `ProxyCommand`) tournent dans un job (un Job object sous Windows, un groupe de process ailleurs), le tunnel de chaque serveur comme chaque port relayé. Ils s'arrêtent ensemble, tout de suite : quand le dialogue se ferme, quand un serveur est retiré, quand la fenêtre quitte le serveur (ses ports relayés), quand ce qui les tient disparaît sans les arrêter, et quand l'app quitte, même pour une mise à jour. Sous Windows, le système arrête aussi le job quand l'app finit sans s'arrêter proprement (plantage, process tué). Le `ssh` qui lance `escouade-server pair` ou `status` suit la même règle.
 
 ## Le jeton
 
-Le jeton d'appareil reçu à l'appairage est gardé **dans le trousseau du poste, un par serveur** ; sans trousseau (Linux), dans un fichier des données de l'app lisible du seul propriétaire, et Réglages › Serveurs le dit. **Jamais dans les réglages ni dans le journal.** La liste des serveurs connus (nom de l'espace, hôte SSH, port, nom de ce poste là-bas, version et machine vues, dernier état) est dans les données de l'app, sans jeton.
+Le jeton d'appareil reçu à l'appairage est gardé **dans le trousseau du poste, un par serveur** ; sans trousseau (Linux), dans un fichier des données de l'app lisible du seul propriétaire, et Réglages › Serveurs le dit. **Jamais dans les réglages ni dans le journal.** La liste des serveurs connus (nom de l'espace, hôte SSH, port et socket, nom de ce poste là-bas, version et machine vues, dernier état) est dans les données de l'app, sans jeton.
 
 ## Les états
 
@@ -44,12 +46,13 @@ Chaque état dit **ce qui s'est passé**, **ce qui n'a pas changé** (« Rien n'
 | --- | --- |
 | Injoignable | « acme-escouade ne répond pas » ; la commande `ssh` et sa sortie ; les causes plausibles (le VPN pour une adresse `.internal`, `.lan`, `.corp`…, le serveur ou son pare-feu, le `HostName` de la config) ; « Copier la commande ssh », « Modifier l'hôte », « Réessayer » |
 | Compte refusé | « … refuse la connexion SSH » ; charger sa clé dans l'agent (`ssh-add`) |
-| Redirection interdite | « … refuse la redirection » (`AllowTcpForwarding no`) |
+| Redirection interdite | « … refuse la redirection » (`AllowTcpForwarding no`), que le refus vienne au démarrage du tunnel ou à la connexion (« open failed: administratively prohibited ») |
+| Redirection vers la socket refusée (ESC-706) | « … refuse la redirection vers la socket » (`AllowStreamLocalForwarding no`) ; le repli : « le service sur un port, à lancer sur le serveur », `sh install.sh --port 46480` à copier, puis « Réessayer », qui relit où écoute le serveur et passe par le port. Réessayer seul ne le répare pas : le tunnel n'est pas relancé de lui-même |
 | Clé d'hôte inconnue | « Escouade n'accepte pas de clé à ta place : connecte-toi une fois par `ssh <hôte>` » ; « Copier la commande » |
 | Clé d'hôte changée | La vérifier avec l'administrateur avant de la remplacer dans `known_hosts` |
-| Pas d'Escouade sur le serveur | « escouade-server ne répond pas sur le serveur : est-il installé et lancé ? » |
+| Pas d'Escouade sur le serveur | « escouade-server ne répond pas sur le serveur : est-il installé et lancé ? » (aussi quand l'utilisateur SSH n'est pas celui du service, à qui seul est la socket) |
 | Code faux, ou expiré | Sous le code : « Ce code n'est pas le bon. » / « Ce code a expiré : relance escouade-server pair. » / « Trop d'essais faux en une minute : le code vaut toujours, réessaie dans une minute. » (ESC-654 ; un serveur d'avant disait encore « trop d'essais : ce code ne vaut plus ») ; le code se vide, le focus y revient |
-| Version différente | Les deux versions et le côté à mettre à jour ; pour ce poste, « Mettre à jour Escouade » ; pour le serveur, la version à y installer (sa mise à jour depuis le client viendra) |
+| Version différente | Les deux versions et le côté à mettre à jour ; pour ce poste, « Mettre à jour Escouade » ; pour le serveur, « Mettre à jour le serveur » (voir *Le mode serveur*) |
 | Coupure et reprise | Voir plus bas |
 | Jeton révoqué | L'espace entier : « Ce poste n'est plus appairé à Travail », quand et depuis quel appareil (ou « depuis le serveur ») ; « Appairer de nouveau », « Aller sur Ce poste », « Retirer Travail de ce poste » |
 | Refusé par la stratégie | Avant toute connexion : « Le serveur … est refusé : la stratégie de ce poste ne permet que … » |
@@ -80,6 +83,7 @@ Dès qu'un serveur est connu :
 
 ## Ce que le serveur donne au client
 
+- `escouade-server status --json`, lu par SSH : s'il tourne, sa version, où écoute son API (`api`, `socket`), rien d'autre.
 - Le message d'accueil de l'API porte la machine du serveur (son nom et le compte du service).
 - `ping` et sa réponse, aussitôt : la latence.
 - Le refus d'un jeton porte la version du serveur, et, pour un appareil révoqué, son nom, la date et qui l'a révoqué (le serveur garde une trace des 32 derniers appareils révoqués : nom, date, auteur et empreinte du jeton, jamais le jeton).
@@ -88,6 +92,7 @@ Dès qu'un serveur est connu :
 
 ## La sécurité
 
-- Un serveur est une autre machine : le client n'exécute rien de ce qu'il dit ; ses textes (et ceux de `ssh`) sont montrés comme des données.
+- Un serveur est une autre machine : le client n'exécute rien de ce qu'il dit ; ses textes (et ceux de `ssh`, et la réponse de `status --json`) sont montrés ou lus comme des données.
 - La politique de contenu de la fenêtre ne lui permet que les WebSockets de `127.0.0.1`.
+- Sur une socket (le service d'`install.sh`), les autres comptes de la machine du serveur n'atteignent pas l'API et ne peuvent pas prendre sa place pendant un redémarrage : le tunnel revenu ne donne jamais le jeton du poste à un autre programme qu'à `escouade-server`.
 - Les stratégies imposées du poste valent : `servers.allowed` (des hôtes ou des domaines, `*.acme.internal`) refuse un serveur avant toute connexion, à l'ouverture d'un serveur connu comme au démarrage de l'app.

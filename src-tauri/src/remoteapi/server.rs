@@ -329,9 +329,20 @@ pub struct RemoteApi {
 pub enum Listen {
     Port(u16),
     Bound(std::net::TcpListener),
+    /// A Unix socket bound already (`escouade-server --socket`, ESC-706): its folder checked, its lock held
+    /// (`server::socket`). Its connections come from this machine, as the loopback's.
+    #[cfg(unix)]
+    Unix(std::os::unix::net::UnixListener),
     /// No socket of its own: it serves the connections it is handed (`serve_stream`), the phone's tunnel's
     /// (ESC-567: on the desktop, the API is served in the tunnel alone).
     Nothing,
+}
+
+/// What the API accepts its connections on.
+enum Listener {
+    Tcp(TcpListener),
+    #[cfg(unix)]
+    Unix(tokio::net::UnixListener),
 }
 
 /// Where a connection comes from (ESC-567), which says the `Host` and the `Origin` it may give.
@@ -390,20 +401,33 @@ impl RemoteApi {
         #[cfg(not(debug_assertions))]
         let devices = Devices::load(&core.data, core.secrets.clone());
         let listener = match listen {
-            Listen::Port(port) => Some(
+            Listen::Port(port) => Some(Listener::Tcp(
                 TcpListener::bind((Ipv4Addr::LOCALHOST, port))
                     .await
                     .with_context(|| format!("remote API: port {port}"))?,
-            ),
+            )),
             Listen::Bound(socket) => {
                 socket.set_nonblocking(true)?;
-                Some(TcpListener::from_std(socket)?)
+                Some(Listener::Tcp(TcpListener::from_std(socket)?))
+            }
+            #[cfg(unix)]
+            Listen::Unix(socket) => {
+                socket.set_nonblocking(true)?;
+                Some(Listener::Unix(tokio::net::UnixListener::from_std(socket)?))
             }
             Listen::Nothing => None,
         };
         let addr = match &listener {
-            Some(l) => l.local_addr()?,
-            None => SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            Some(Listener::Tcp(l)) => l.local_addr()?,
+            _ => SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        };
+        let on_socket: Option<String> = match &listener {
+            #[cfg(unix)]
+            Some(Listener::Unix(l)) => l
+                .local_addr()
+                .ok()
+                .and_then(|a| a.as_pathname().map(|p| p.display().to_string())),
+            _ => None,
         };
         let api = Arc::new(Self {
             services,
@@ -424,9 +448,10 @@ impl RemoteApi {
             hosts: Mutex::new(Arc::new(Vec::new())),
             page: Mutex::new(None),
         });
-        match &listener {
-            Some(_) => log::info!("remote API: listening on {addr}"),
-            None => log::info!("remote API: served in the phone's tunnel alone"),
+        match (&listener, on_socket) {
+            (Some(_), Some(path)) => log::info!("remote API: listening on the socket {path}"),
+            (Some(_), None) => log::info!("remote API: listening on {addr}"),
+            (None, _) => log::info!("remote API: served in the phone's tunnel alone"),
         }
         let me = api.clone();
         tokio::spawn(async move { me.accept(listener).await });
@@ -946,12 +971,22 @@ impl RemoteApi {
         write_answer(stream, answer.bytes(head_only)).await;
     }
 
-    async fn accept(self: Arc<Self>, listener: Option<TcpListener>) {
+    async fn accept(self: Arc<Self>, listener: Option<Listener>) {
         let mut devices = tokio::time::interval(DEVICES_EVERY);
         loop {
             let accepting = async {
                 match &listener {
-                    Some(l) => l.accept().await,
+                    Some(Listener::Tcp(l)) => l
+                        .accept()
+                        .await
+                        .map(|(s, from)| (Box::new(s) as Box<dyn Io>, Some(from.ip()))),
+                    // A connection of the socket comes from this machine (`ssh -L` to it, a command beside the
+                    // server): as the loopback's, with no address.
+                    #[cfg(unix)]
+                    Some(Listener::Unix(l)) => l
+                        .accept()
+                        .await
+                        .map(|(s, _)| (Box::new(s) as Box<dyn Io>, None)),
                     None => std::future::pending().await,
                 }
             };
@@ -960,7 +995,7 @@ impl RemoteApi {
                 _ = devices.tick() => self.sync_devices(),
                 accepted = accepting => match accepted {
                     Ok((stream, from)) => {
-                        let _ = self.serve_stream_from(Box::new(stream), Via::Loopback, Some(from.ip()));
+                        let _ = self.serve_stream_from(stream, Via::Loopback, from);
                     }
                     Err(e) => {
                         log::warn!("remote API: accept: {e}");

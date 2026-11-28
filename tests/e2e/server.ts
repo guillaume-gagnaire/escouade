@@ -122,8 +122,17 @@ export interface BareServer {
   stop: () => Promise<void>;
 }
 
-/** `escouade-server` started on `data` (its settings.json written already) with `env`, on `port` (0: a free one), ready. */
-export async function startBareServer(program: string, data: string, env: NodeJS.ProcessEnv, port: number): Promise<BareServer> {
+/**
+ * `escouade-server` started on `data` (its settings.json written already) with `env`, on `port` (0: a free one), ready.
+ * With `socket` (ESC-706, Unix only), on that Unix socket instead: `port` is then 0.
+ */
+export async function startBareServer(
+  program: string,
+  data: string,
+  env: NodeJS.ProcessEnv,
+  port: number,
+  socket?: string,
+): Promise<BareServer> {
   if (!fs.existsSync(program)) throw new Error(`build the server first: cargo build --bin escouade-server (missing ${program})`);
   // Its own log (ESC-539: two servers of one test each read their own « ready » line).
   const out = path.join(data, '..', `${path.basename(data)}-stdout.log`);
@@ -132,7 +141,8 @@ export async function startBareServer(program: string, data: string, env: NodeJS
   const from = fs.existsSync(out) ? fs.statSync(out).size : 0;
   const fd = fs.openSync(out, 'a');
   const at = Date.now();
-  const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(port)], { env, stdio: ['ignore', fd, fd] });
+  const listen = socket ? ['--socket', socket] : ['--port', String(port)];
+  const child: ChildProcess = spawn(program, ['run', '--data-dir', data, ...listen], { env, stdio: ['ignore', fd, fd] });
   fs.closeSync(fd);
   let exited: string | null = null;
   let exitedAt: number | null = null;
@@ -147,6 +157,7 @@ export async function startBareServer(program: string, data: string, env: NodeJS
   for (const deadline = Date.now() + 90_000; Date.now() < deadline;) {
     const ready = /ready: remote API on ws:\/\/127\.0\.0\.1:(\d+)\//.exec(log());
     if (ready) return { data, port: Number(ready[1]), log, stop };
+    if (socket && /ready: remote API on the socket /.test(log())) return { data, port: 0, log, stop };
     if (exited) throw new Error(`escouade-server stopped as it started (${exited}):\n${log()}`);
     await wait(200);
   }

@@ -4,7 +4,8 @@
 //! would cut someone's work (`updates::busy`, as the app's automatic restart: a turn, a question, a background task, a
 //! terminal used lately…), to wait for it.
 //!
-//! It holds no secret: a process id, versions, an address of the loopback or the one `--listen` asked for, a reason.
+//! It holds no secret: a process id, versions, an address of the loopback or the one `--listen` asked for (or the path
+//! of its socket, ESC-706), a reason.
 
 use crate::paths::DataDir;
 use anyhow::Result;
@@ -55,8 +56,12 @@ pub fn supervisor_of(var: impl Fn(&str) -> Option<String>) -> Option<Supervisor>
 pub struct Status {
     pub pid: u32,
     pub version: String,
-    /// Where its API listens.
+    /// Where its API listens: an address, or the path of its socket.
     pub api: String,
+    /// The Unix socket its API listens on (`--socket`, ESC-706), none on a port: what `ssh -L` reaches, read by the
+    /// desktop client through `escouade-server status --json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket: Option<String>,
     pub started_at: i64,
     /// When it was written (ms): a server stuck stops writing it.
     pub at: i64,
@@ -130,6 +135,61 @@ pub fn healthy(
             age / 1000
         ));
     }
+    Ok(())
+}
+
+/// What `escouade-server status --json` prints (ESC-706): no secret, nothing of the agents' work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Said {
+    pub running: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket: Option<String>,
+}
+
+impl Said {
+    /// Of the status of a server that runs, or of none.
+    pub fn of(status: Option<&Status>) -> Said {
+        match status {
+            Some(s) => Said {
+                running: true,
+                version: Some(s.version.clone()),
+                api: Some(s.api.clone()),
+                socket: s.socket.clone(),
+            },
+            None => Said {
+                running: false,
+                version: None,
+                api: None,
+                socket: None,
+            },
+        }
+    }
+}
+
+/// The socket `path` of a server that runs is still there, a socket (`health`, ESC-706).
+pub fn socket_there(path: &std::path::Path) -> std::result::Result<(), String> {
+    let gone = || {
+        tr!(
+            "la socket {} du serveur n’est plus là",
+            "the server's socket {} is gone",
+            path.display()
+        )
+    };
+    let m = std::fs::symlink_metadata(path).map_err(|_| gone())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        if !m.file_type().is_socket() {
+            return Err(gone());
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = m;
     Ok(())
 }
 

@@ -1,5 +1,7 @@
 //! The SSH tunnel to a server (ESC-537, `docs/REMOTE.md`, « Le tunnel : SSH d'abord »): the system's `ssh`, run as
-//! `ssh -N -L 127.0.0.1:<local port>:127.0.0.1:<server's port> <host>`, with the user's config, agent and known hosts.
+//! `ssh -N -L 127.0.0.1:<local port>:127.0.0.1:<server's port> <host>`, or to the server's Unix socket
+//! `ssh -N -L 127.0.0.1:<local port>:<socket> <host>` (ESC-706, [`Remote`]), with the user's config, agent and known
+//! hosts.
 //!
 //! - **Never a host key accepted in the user's place**: `BatchMode=yes` (no question, no password typed) and
 //!   `StrictHostKeyChecking=yes` given on the command line, which wins over the config: an unknown or changed key ends
@@ -229,8 +231,10 @@ fn safe_options(dest: &Dest) -> Vec<String> {
     args
 }
 
-/// The arguments of the tunnel: `-N -L 127.0.0.1:<local>:127.0.0.1:<remote>`, the safe options, `-v` for its readiness.
-pub fn forward_args(dest: &Dest, local: u16, remote: u16) -> Vec<String> {
+/// The arguments of the tunnel: `-N -L 127.0.0.1:<local>:127.0.0.1:<remote>` (or `:<socket>`), the safe options, `-v`
+/// for its readiness.
+pub fn forward_args(dest: &Dest, local: u16, remote: impl Into<Remote>) -> Vec<String> {
+    let remote = remote.into();
     let mut args = vec![
         "-N".to_string(),
         "-v".to_string(),
@@ -241,7 +245,7 @@ pub fn forward_args(dest: &Dest, local: u16, remote: u16) -> Vec<String> {
         "-o".into(),
         "ServerAliveCountMax=3".into(),
         "-L".into(),
-        format!("127.0.0.1:{local}:127.0.0.1:{remote}"),
+        format!("127.0.0.1:{local}:{}", remote.target()),
     ];
     args.extend(safe_options(dest));
     args.push(dest.target.clone());
@@ -249,9 +253,58 @@ pub fn forward_args(dest: &Dest, local: u16, remote: u16) -> Vec<String> {
 }
 
 /// The command the user would type for the same tunnel (shown when it fails, copied to try it in a terminal).
-pub fn shown_command(dest: &Dest, local: u16, remote: u16) -> String {
+pub fn shown_command(dest: &Dest, local: u16, remote: impl Into<Remote>) -> String {
     let port = dest.port.map(|p| format!(" -p {p}")).unwrap_or_default();
-    format!("ssh -N -L {local}:127.0.0.1:{remote}{port} {}", dest.target)
+    format!(
+        "ssh -N -L {local}:{}{port} {}",
+        remote.into().target(),
+        dest.target
+    )
+}
+
+/// The server's end of a tunnel: a port of its 127.0.0.1, or its Unix socket (ESC-706), whose path was read from the
+/// server by SSH (`escouade-server status --json`), never guessed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Remote {
+    Port(u16),
+    Socket(String),
+}
+
+impl From<u16> for Remote {
+    fn from(port: u16) -> Self {
+        Remote::Port(port)
+    }
+}
+
+impl From<&Remote> for Remote {
+    fn from(r: &Remote) -> Self {
+        r.clone()
+    }
+}
+
+impl Remote {
+    /// As `-L` writes it after the local port.
+    fn target(&self) -> String {
+        match self {
+            Remote::Port(p) => format!("127.0.0.1:{p}"),
+            Remote::Socket(path) => path.clone(),
+        }
+    }
+
+    pub fn is_socket(&self) -> bool {
+        matches!(self, Remote::Socket(_))
+    }
+}
+
+/// A socket's path the server said, taken when `ssh -L` can reach it: absolute, without a colon (which `-L` reads),
+/// a space or a control character, short enough for a socket.
+pub fn socket_path_ok(path: &str) -> bool {
+    path.starts_with('/')
+        && path.len() <= 103
+        && !path.ends_with('/')
+        && !path
+            .chars()
+            .any(|c| c == ':' || c.is_whitespace() || c.is_control())
 }
 
 /// A port of 127.0.0.1 free now (the system's choice).
@@ -276,6 +329,9 @@ pub enum Why {
     NoEscouade,
     /// The host refuses forwards (`AllowTcpForwarding no`).
     Forwarding,
+    /// The host refuses a forward to a Unix socket (`AllowStreamLocalForwarding no`, ESC-706): the fallback is the
+    /// service on a port (`install.sh --port`).
+    SocketForwarding,
     /// The local port was taken meanwhile: another one is taken.
     PortBusy,
     /// No `ssh` on this computer.
@@ -296,6 +352,20 @@ impl Why {
 
 /// What `ssh` wrote, read: why it failed.
 pub fn classify(output: &str) -> Why {
+    classify_for(output, false)
+}
+
+/// The same, for a tunnel to a socket when `socket`: a forward refused there is a socket's (ESC-706).
+pub fn classify_for(output: &str, socket: bool) -> Why {
+    let why = classify_port(output);
+    if socket && why == Why::Forwarding {
+        Why::SocketForwarding
+    } else {
+        why
+    }
+}
+
+fn classify_port(output: &str) -> Why {
     let o = output.to_ascii_lowercase();
     if o.contains("remote host identification has changed")
         || o.contains("host key for") && o.contains("has changed")
@@ -365,7 +435,7 @@ struct Shared {
 /// A running tunnel.
 pub struct Tunnel {
     pub port: u16,
-    pub remote: u16,
+    pub remote: Remote,
     pub dest: Dest,
     shared: Arc<parking_lot::Mutex<Shared>>,
     changed: Arc<tokio::sync::Notify>,
@@ -375,13 +445,14 @@ pub struct Tunnel {
 }
 
 impl Tunnel {
-    /// `ssh` started for a tunnel of `local` (none: a free port) to the server's `remote` port of `dest`.
+    /// `ssh` started for a tunnel of `local` (none: a free port) to the server's `remote` port (or socket) of `dest`.
     pub fn start(
         ssh: &Ssh,
         dest: &Dest,
-        remote: u16,
+        remote: impl Into<Remote>,
         local: Option<u16>,
     ) -> Result<Tunnel, Failure> {
+        let remote = remote.into();
         let port = match local {
             Some(p) => p,
             None => free_port().map_err(|e| Failure {
@@ -390,8 +461,8 @@ impl Tunnel {
                 command: String::new(),
             })?,
         };
-        let command = shown_command(dest, port, remote);
-        let mut cmd = ssh.command(&forward_args(dest, port, remote));
+        let command = shown_command(dest, port, &remote);
+        let mut cmd = ssh.command(&forward_args(dest, port, &remote));
         cmd.stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped());
         let mut child = cmd.spawn().map_err(|e| Failure {
@@ -470,9 +541,9 @@ impl Tunnel {
         let s = self.shared.lock();
         let all = s.lines.join("\n");
         Failure {
-            why: classify(&all),
+            why: classify_for(&all, self.remote.is_socket()),
             output: shown_output(&s.lines),
-            command: shown_command(&self.dest, self.port, self.remote),
+            command: shown_command(&self.dest, self.port, &self.remote),
         }
     }
 

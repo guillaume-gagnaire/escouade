@@ -2,7 +2,7 @@
   // A state of a connection to a server (ESC-537, docs/SERVER-UX.md § 3): what happened, what did not change, and the
   // next gesture. What ssh and the server said is shown as text, never run.
   import type { Snippet } from 'svelte';
-  import type { ServerProblem } from '../../lib/connection.svelte';
+  import { SOCKET_FALLBACK, type ServerProblem } from '../../lib/connection.svelte';
   import { fDate, fTime } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
@@ -36,6 +36,7 @@
       case 'unreachable':
         if (problem.why === 'auth') return t('servers.problem.auth.title', { host });
         if (problem.why === 'forwarding') return t('servers.problem.forwarding.title', { host });
+        if (problem.why === 'socketForwarding') return t('servers.problem.socketForwarding.title', { host });
         if (problem.why === 'noSsh') return t('servers.problem.noSsh.title');
         return t('servers.problem.unreachable.title', { host });
       case 'hostKey':
@@ -80,6 +81,7 @@
     <p>
       {#if problem.why === 'auth'}{t('servers.problem.auth.text')}
       {:else if problem.why === 'forwarding'}{t('servers.problem.forwarding.text')}
+      {:else if problem.why === 'socketForwarding'}{t('servers.problem.socketForwarding.text')}
       {:else if problem.why === 'noSsh'}{t('servers.problem.noSsh.text')}
       {:else}{t('servers.problem.unreachable.text', { host: target || host })}{/if}
       {t('servers.problem.unchanged')}
@@ -116,6 +118,15 @@
       {#if problem.command}<span class="d">$ {problem.command}</span>{/if}
       {#if problem.output}<span class="e">{problem.output}</span>{/if}
     </div>
+  {/if}
+
+  {#if problem.kind === 'unreachable' && problem.why === 'socketForwarding'}
+    <!-- The fallback (ESC-706): the service on a port, the tunnel then goes there. -->
+    <div class="lbl">{t('servers.problem.socketForwarding.fallback')}</div>
+    <div class="code" aria-label={t('servers.problem.socketForwarding.fallback')} data-testid="socket-fallback">
+      <span>{SOCKET_FALLBACK}</span>
+    </div>
+    <p class="hint"><Icon name="info" size={12} />{t('servers.problem.socketForwarding.then')}</p>
   {/if}
 
   {#if problem.kind === 'unreachable' && problem.why === 'unreachable'}

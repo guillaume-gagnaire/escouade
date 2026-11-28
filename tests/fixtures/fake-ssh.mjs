@@ -8,8 +8,15 @@
 //   the « server » took after the forward started: the fake `codex login`'s, ESC-538).
 //   It says what `ssh -v` says once ready (« Authenticated to … », « Local forwarding listening on … »); a connection
 //   nothing answers says « channel 2: open failed: connect failed: Connection refused », as `ssh` does.
+// - `ssh -N -L 127.0.0.1:<local>:<socket> … <host>` (ESC-706): a forward to the server's Unix socket; under Windows,
+//   where the server has none, FAKE_SSH_SOCKET_PORT plays it (the socket's connections go to that port), or the file
+//   `socket` of FAKE_SSH_DIR (`<path>=<port>`). With FAKE_SSH_NO_STREAMLOCAL, or while `no-streamlocal` exists in
+//   FAKE_SSH_DIR, the host refuses such forwards as `AllowStreamLocalForwarding no` does: the forward listens, each
+//   connection says « channel 2: open failed: administratively prohibited: open failed » and is closed.
 // - `ssh … <host> <command>`: `escouade-server pair` runs FAKE_SSH_SERVER `pair --data-dir FAKE_SSH_DATA` and prints
-//   its output; without FAKE_SSH_SERVER, « escouade-server: not found » (127).
+//   its output; `escouade-server status --json` runs FAKE_SSH_SERVER `status --json` the same way, and with
+//   FAKE_SSH_SOCKET a server that runs says that socket (ESC-706); without FAKE_SSH_SERVER, « escouade-server: not
+//   found » (127).
 // - The host says the failure it plays: `…inconnu…` an unknown host key, `…change…` a changed one, `…injoignable…` a
 //   timed out connection, `…refuse…` an account refused.
 // - FAKE_SSH_DIR: each run appends its arguments to `runs.log` there; while `down` exists there, every run fails as an
@@ -29,6 +36,29 @@ if (dir) {
   fs.mkdirSync(dir, { recursive: true });
   fs.appendFileSync(path.join(dir, 'runs.log'), JSON.stringify(argv) + '\n');
 }
+
+/**
+ * The server's socket (ESC-706): FAKE_SSH_SOCKET, or the file `socket` of FAKE_SSH_DIR (written while the app runs),
+ * `<path>` or `<path>=<port>`; the port plays it (FAKE_SSH_SOCKET_PORT too), where the server has no socket (Windows).
+ */
+function socketPlayed() {
+  let text = process.env.FAKE_SSH_SOCKET || '';
+  if (!text && dir) {
+    try {
+      text = fs.readFileSync(path.join(dir, 'socket'), 'utf8').trim();
+    } catch {
+      // none
+    }
+  }
+  const [p, port] = text.split('=');
+  const n = Number(port || process.env.FAKE_SSH_SOCKET_PORT || 0);
+  // No socket said, but a port that plays any socket forwarded to (the Rust tests'): the forward alone.
+  if (!text) return n ? { path: null, port: n } : null;
+  return { path: p, port: n || null };
+}
+
+/** The host refuses forwards to a socket: FAKE_SSH_NO_STREAMLOCAL, or the file `no-streamlocal` of FAKE_SSH_DIR. */
+const noStreamLocal = () => !!process.env.FAKE_SSH_NO_STREAMLOCAL || (!!dir && fs.existsSync(path.join(dir, 'no-streamlocal')));
 
 // The options, then the host, then the command.
 let forward = null;
@@ -78,15 +108,26 @@ if (dir && (fs.existsSync(path.join(dir, 'down')) || fs.existsSync(path.join(dir
   if (!/escouade-server/.test(command)) fail([`fake-ssh: unknown command ${command}`], 1);
   const server = process.env.FAKE_SSH_SERVER;
   if (!server) fail(['sh: 1: escouade-server: not found'], 127);
-  const args = ['pair'];
+  const status = /status --json/.test(command);
+  const args = status ? ['status', '--json'] : ['pair'];
   if (process.env.FAKE_SSH_DATA) args.push('--data-dir', process.env.FAKE_SSH_DATA);
   const run = spawnSync(server, args, { encoding: 'utf8', env: process.env, shell: /\.(cmd|bat)$/i.test(server) });
-  process.stdout.write(run.stdout || '');
+  let out = run.stdout || '';
+  const played = socketPlayed();
+  if (status && played?.path && run.status === 0) {
+    // The server runs on its socket (played by a port under Windows): it says it.
+    const said = JSON.parse(out.trim().split(/\r?\n/).pop() || '{}');
+    // Under Windows the server cannot tell its own process alive (`status::alive`): the fake plays one that runs.
+    Object.assign(said, { running: true, api: played.path, socket: played.path });
+    out = JSON.stringify(said) + '\n';
+  }
+  process.stdout.write(out);
   process.stderr.write(run.stderr || '');
   process.exit(run.status ?? 1);
 } else {
-  // The forward: 127.0.0.1:<local> to 127.0.0.1:<remote, mapped>.
-  const m = /^(?:127\.0\.0\.1:)?(\d+):127\.0\.0\.1:(\d+)$/.exec(forward || '');
+  // The forward: 127.0.0.1:<local> to 127.0.0.1:<remote, mapped>, or to a socket's path (ESC-706).
+  const toSocket = /^(?:127\.0\.0\.1:)?(\d+):(\/[^:]+)$/.exec(forward || '');
+  const m = toSocket || /^(?:127\.0\.0\.1:)?(\d+):127\.0\.0\.1:(\d+)$/.exec(forward || '');
   if (!m) fail([`fake-ssh: bad forward ${forward}`], 2);
   const local = Number(m[1]);
   const ports = Object.fromEntries(
@@ -127,7 +168,17 @@ if (dir && (fs.existsSync(path.join(dir, 'down')) || fs.existsSync(path.join(dir
   let channel = 1;
   const server = net.createServer((client) => {
     channel++;
-    const upstream = net.connect({ host: '127.0.0.1', port: remoteOf() });
+    if (toSocket && noStreamLocal()) {
+      say(`channel ${channel}: open failed: administratively prohibited: open failed`);
+      client.destroy();
+      return;
+    }
+    const port = toSocket ? socketPlayed()?.port : null;
+    const upstream = toSocket
+      ? port
+        ? net.connect({ host: '127.0.0.1', port })
+        : net.connect({ path: toSocket[2] })
+      : net.connect({ host: '127.0.0.1', port: remoteOf() });
     sockets.add(client);
     sockets.add(upstream);
     let opened = false;
@@ -156,7 +207,11 @@ if (dir && (fs.existsSync(path.join(dir, 'down')) || fs.existsSync(path.join(dir
   });
   server.listen(local, '127.0.0.1', () => {
     say(`debug1: Authenticated to ${host} ([127.0.0.1]:22) using "publickey".`);
-    say(`debug1: Local connections to 127.0.0.1:${local} forwarded to remote address 127.0.0.1:${m[2]}`);
+    say(
+      toSocket
+        ? `debug1: Local connections to 127.0.0.1:${local} forwarded to remote socket ${m[2]}`
+        : `debug1: Local connections to 127.0.0.1:${local} forwarded to remote address 127.0.0.1:${m[2]}`,
+    );
     say(`debug1: Local forwarding listening on 127.0.0.1 port ${local}.`);
   });
   const end = () => {

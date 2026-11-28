@@ -13,6 +13,13 @@
 # writes the unit of the service and starts it. Run again, it changes only what differs (another version, another
 # unit); the data is never touched but by --purge.
 #
+# The service listens on a Unix socket by default (ESC-706): $XDG_RUNTIME_DIR/escouade/server.sock for a service of the
+# user, /run/escouade-server/server.sock for one of the system, each in a folder 0700 that is its user's alone: the
+# other accounts of the machine cannot reach the API, nor take its place while it restarts. Escouade on your computer
+# reads the socket by SSH and opens its tunnel to it. --port N keeps it on a port of 127.0.0.1 instead (a proxy in
+# front of it, or an SSH server that refuses forwards to a socket: AllowStreamLocalForwarding no). Run again on an
+# installation, it keeps how the service listens unless --socket or --port is given.
+#
 # The server then updates itself (ESC-702): it looks for a version of its channel shortly after it starts and every 15
 # minutes, checks its signature as below, puts it in place and restarts at rest only, under systemd. A beta installed
 # (--version X.Y.Z-beta.N) puts it on the beta channel. `escouade-server config` turns it off or changes the channel.
@@ -21,6 +28,8 @@
 #   --version X.Y.Z   this version (else the latest release's); a beta (X.Y.Z-beta.N) puts the server on the beta channel
 #   --system          a service of the system (as root), run by --user (default: escouade)
 #   --user NAME       with --system: the user that runs it
+#   --socket          the API on the service's Unix socket (the default of a new installation)
+#   --port N          the API on 127.0.0.1:N instead of a socket (46480: the usual port; for a proxy, or the fallback)
 #   --no-start        installs without starting the service
 #   --uninstall       removes the service and the program, keeps the data
 #   --purge           with --uninstall: removes the data too (~/.escouade; with --system, the user and its home)
@@ -44,6 +53,10 @@ user=escouade
 start=1
 uninstall=0
 purge=0
+# How the API listens: socket, port, or empty (a new installation: the socket; one there: as it is).
+listen=
+DEFAULT_PORT=46480
+port=$DEFAULT_PORT
 
 say() { printf '%s\n' "$*"; }
 die() {
@@ -59,6 +72,9 @@ while [ $# -gt 0 ]; do
     --system) system=1 ;;
     --user) user=${2:?--user needs a name}; shift ;;
     --user=*) user=${1#*=} ;;
+    --socket) listen=socket ;;
+    --port) listen=port; port=${2:?--port needs a port}; shift ;;
+    --port=*) listen=port; port=${1#*=} ;;
     --no-start) start=0 ;;
     --uninstall) uninstall=1 ;;
     --purge) purge=1 ;;
@@ -76,6 +92,10 @@ esac
 case $user in
   *[!a-z0-9_-]* | '') die "--user: \"$user\" is not a user name" ;;
 esac
+case $port in
+  '' | *[!0-9]*) die "--port: \"$port\" is not a port" ;;
+esac
+[ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "--port: \"$port\" is not a port"
 
 [ "$(uname -s)" = Linux ] || die "escouade-server runs on Linux"
 case $(uname -m) in
@@ -109,6 +129,41 @@ fi
 dir=$home/.local/share/escouade-server
 data=$home/.escouade
 unit=$unit_dir/$SERVICE.service
+
+# How the API listens: as asked; else as the service there does (never changed behind the user's back); else the socket.
+kept=0
+if [ -z "$listen" ] && [ "$uninstall" = 0 ]; then
+  if [ -f "$unit" ]; then
+    if grep -q -- '--socket' "$unit"; then
+      listen=socket
+    else
+      listen=port
+      was=$(sed -n 's/^ExecStart=.* --port \([0-9][0-9]*\).*/\1/p' "$unit" | head -1)
+      port=${was:-$DEFAULT_PORT}
+    fi
+    kept=1
+  else
+    listen=socket
+  fi
+fi
+if [ "$system" = 1 ]; then
+  socket_path=/run/$SERVICE/server.sock
+  socket_arg=$socket_path
+else
+  socket_path=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/escouade/server.sock
+  # In the unit, systemd's own name of the user's runtime folder ($XDG_RUNTIME_DIR).
+  socket_arg=%t/escouade/server.sock
+fi
+if [ "$listen" = socket ]; then
+  exec_args="run --socket $socket_arg"
+  listening="the Unix socket $socket_path"
+  hand_tunnel="ssh -N -L $DEFAULT_PORT:$socket_path <this server>"
+else
+  # The usual port is written as before (`run`): an installation of before ESC-706 keeps its very unit.
+  if [ "$port" = "$DEFAULT_PORT" ]; then exec_args=run; else exec_args="run --port $port"; fi
+  listening="the port $port of 127.0.0.1"
+  hand_tunnel="ssh -N -L $port:127.0.0.1:$port <this server>"
+fi
 
 # ---------- uninstall ----------
 
@@ -266,7 +321,10 @@ Type=simple
 User=$user
 Group=$(id -gn "$user")
 WorkingDirectory=$home
-ExecStart=$dir/escouade-server run
+ExecStart=$dir/escouade-server $exec_args
+# The folder of its socket (ESC-706): /run/$SERVICE, 0700, its user's alone.
+RuntimeDirectory=$SERVICE
+RuntimeDirectoryMode=0700
 # The clean stop: SIGTERM to the server alone, which stops its agents itself (each resumes its session).
 KillMode=mixed
 TimeoutStopSec=90
@@ -291,7 +349,7 @@ Documentation=https://escouade.dev/docs/server/
 
 [Service]
 Type=simple
-ExecStart=$dir/escouade-server run
+ExecStart=$dir/escouade-server $exec_args
 # The clean stop: SIGTERM to the server alone, which stops its agents itself (each resumes its session).
 KillMode=mixed
 TimeoutStopSec=90
@@ -304,6 +362,11 @@ NoNewPrivileges=yes
 [Install]
 WantedBy=default.target
 EOF
+fi
+if [ "$kept" = 1 ]; then
+  say "Listening kept as the service there does: $listening (--socket or --port N to change it)."
+else
+  say "Listening: $listening."
 fi
 if ! cmp -s "$tmp/unit" "$unit" 2>/dev/null; then
   cp "$tmp/unit" "$unit"
@@ -358,9 +421,9 @@ cat <<EOF
 
 Next:
   1. A pairing code for your computer:   $pair_cmd
-  2. On your computer, a tunnel to the server's API (it listens on 127.0.0.1 of the server only):
-       ssh -N -L 46480:127.0.0.1:46480 <this server>
-     then, in Escouade, « Se connecter à un serveur » (Connect to a server), and the code.
+  2. On your computer, in Escouade, « Se connecter à un serveur » (Connect to a server), this server's SSH host, then
+     the code: Escouade opens its SSH tunnel to the API itself ($listening). A tunnel by hand:
+       $hand_tunnel
   3. Updates: automatic (the signature checked, the restart at rest); escouade-server config turns them off or
      changes the channel, escouade-server update runs one now.
 

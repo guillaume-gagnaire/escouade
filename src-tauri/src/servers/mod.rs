@@ -39,7 +39,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tunnel::{Dest, Failure, Ssh, Tunnel, Why};
+use tunnel::{Dest, Failure, Remote, Ssh, Tunnel, Why};
 
 /// The file of the servers known, in the app's data.
 pub const FILE: &str = "servers.json";
@@ -56,6 +56,13 @@ const PAIR_OVER_SSH_WAIT: Duration = Duration::from_secs(45);
 /// without login, or where the installation puts it.
 pub const PAIR_COMMAND: &str = "sh -c 'for p in escouade-server \"$HOME/.local/bin/escouade-server\" /usr/local/bin/escouade-server /opt/escouade/escouade-server; do if command -v \"$p\" >/dev/null 2>&1; then exec \"$p\" pair; fi; done; echo \"escouade-server: not found\" >&2; exit 127'";
 
+/// How long reading the server's status by SSH may take (`escouade-server status --json`, ESC-706).
+const STATUS_WAIT: Duration = Duration::from_secs(30);
+
+/// The command that reads where the server's API listens (ESC-706): `escouade-server status --json`, found as
+/// [`PAIR_COMMAND`] finds it. Its answer says the socket, never guessed here (`%t` depends on the server's uid).
+pub const STATUS_COMMAND: &str = "sh -c 'for p in escouade-server \"$HOME/.local/bin/escouade-server\" /usr/local/bin/escouade-server /opt/escouade/escouade-server; do if command -v \"$p\" >/dev/null 2>&1; then exec \"$p\" status --json; fi; done; echo \"escouade-server: not found\" >&2; exit 127'";
+
 /// A server this computer knows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +76,10 @@ pub struct Known {
     pub host: String,
     /// The port of `escouade-server` on it.
     pub remote_port: u16,
+    /// The Unix socket of `escouade-server` on it (ESC-706), read from it by SSH: the tunnel goes there, not to the
+    /// port. None: the port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket: Option<String>,
     /// This computer's name there.
     pub device: String,
     pub added_at: i64,
@@ -138,6 +149,16 @@ pub enum Problem {
     Refused { code: String, message: String },
 }
 
+impl Known {
+    /// Where its tunnel goes on the server: its socket, else its port.
+    pub fn remote(&self) -> Remote {
+        match &self.socket {
+            Some(path) => Remote::Socket(path.clone()),
+            None => Remote::Port(self.remote_port),
+        }
+    }
+}
+
 impl Problem {
     fn of_failure(f: Failure) -> Problem {
         match f.why {
@@ -165,6 +186,20 @@ impl Problem {
     ) -> Problem {
         match r {
             client::Refusal::NoEscouade { detail } => {
+                // A forward the host refused when the connection came (`-L` listens here, the host says no then):
+                // its own state, not « no Escouade » (ESC-706: a socket's refused, the fallback is the port).
+                if let Some(t) = tunnel {
+                    let why = tunnel::classify_for(&t.output(), t.remote.is_socket());
+                    if matches!(why, Why::Forwarding | Why::SocketForwarding) {
+                        return Problem::Unreachable {
+                            why,
+                            output: tunnel::shown_output(
+                                &t.output().lines().map(str::to_string).collect::<Vec<_>>(),
+                            ),
+                            command: tunnel::shown_command(&t.dest, t.port, &t.remote),
+                        };
+                    }
+                }
                 let output = tunnel
                     .map(|t| {
                         tunnel::shown_output(
@@ -176,7 +211,7 @@ impl Problem {
                 Problem::NoEscouade {
                     output,
                     command: tunnel
-                        .map(|t| tunnel::shown_command(&t.dest, t.port, t.remote))
+                        .map(|t| tunnel::shown_command(&t.dest, t.port, &t.remote))
                         .unwrap_or_default(),
                 }
             }
@@ -277,6 +312,7 @@ struct Attempt {
     dest: Dest,
     host: String,
     remote_port: u16,
+    socket: Option<String>,
     /// Pairing again a server known (its token revoked): the same line.
     existing: Option<String>,
 }
@@ -625,8 +661,21 @@ impl Servers {
                 message: e.to_string(),
             });
         }
+        // Where its API listens, read from it (ESC-706): a port typed is the user's choice and is taken as it is.
+        let socket = if remote_port.is_none() {
+            match self.read_socket(&dest).await {
+                Ok(s) => s,
+                Err(f) => return problem(Problem::of_failure(f)),
+            }
+        } else {
+            None
+        };
         let remote_port = remote_port.unwrap_or(tunnel::SERVER_PORT);
-        let tunnel = match Tunnel::start(&self.ssh, &dest, remote_port, None) {
+        let remote = match &socket {
+            Some(path) => Remote::Socket(path.clone()),
+            None => Remote::Port(remote_port),
+        };
+        let tunnel = match Tunnel::start(&self.ssh, &dest, &remote, None) {
             Ok(t) => Arc::new(t),
             Err(f) => return problem(Problem::of_failure(f)),
         };
@@ -676,6 +725,7 @@ impl Servers {
                 dest,
                 host: host.clone(),
                 remote_port,
+                socket,
                 existing,
             },
         );
@@ -688,6 +738,48 @@ impl Servers {
                 host,
             },
         }
+    }
+
+    /// Where the API of the server `dest` listens, as it says it by SSH (`escouade-server status --json`, ESC-706): its
+    /// socket, or none (its port: a server on a port, one not running, one older than `status`). A failure of SSH
+    /// itself (a host key, an account refused, a host unreachable) is said as the tunnel would say it.
+    async fn read_socket(&self, dest: &Dest) -> Result<Option<String>, Failure> {
+        match tunnel::run(&self.ssh, dest, STATUS_COMMAND, STATUS_WAIT).await {
+            Ok(out) => Ok(socket_in_status(&out)),
+            Err(f) if matches!(f.why, Why::NoEscouade | Why::Ended) => Ok(None),
+            Err(mut f) => {
+                f.command = format!("ssh {} escouade-server status --json", dest.shown());
+                Err(f)
+            }
+        }
+    }
+
+    /// Where the API of the server `id` listens, read again (ESC-706): true when it changed, kept.
+    async fn read_remote_again(&self, id: &str) -> bool {
+        let Some(known) = self.known(id) else {
+            return false;
+        };
+        let Ok(socket) = self.read_socket(&known.dest).await else {
+            return false;
+        };
+        if socket == known.socket {
+            return false;
+        }
+        log::info!(
+            "servers: {} listens {} now",
+            known.dest.shown(),
+            if socket.is_some() {
+                "on a socket"
+            } else {
+                "on its port"
+            }
+        );
+        self.change(|s| {
+            if let Some(k) = s.servers.iter_mut().find(|k| k.id == id) {
+                k.socket = socket.clone();
+            }
+        });
+        true
     }
 
     fn attempt_of(&self, id: &str) -> Option<(Arc<Tunnel>, Dest)> {
@@ -765,6 +857,7 @@ impl Servers {
                 dest: a.dest.clone(),
                 host: a.host.clone(),
                 remote_port: a.remote_port,
+                socket: a.socket.clone(),
                 device: device.trim().to_string(),
                 added_at: now_ms(),
                 version: welcome.as_ref().map(|w| w.version.clone()),
@@ -775,6 +868,8 @@ impl Servers {
             match s.servers.iter_mut().find(|k| k.id == id) {
                 Some(k) => {
                     k.problem = None;
+                    k.remote_port = known.remote_port;
+                    k.socket = known.socket.clone();
                     k.device = known.device.clone();
                     k.version = known.version.clone();
                     k.machine = known.machine.clone();
@@ -840,31 +935,46 @@ impl Servers {
         }
         // A tunnel of its own, then kept up.
         self.stop_tunnel(id);
-        let tunnel = match Tunnel::start(&self.ssh, &known.dest, known.remote_port, None) {
-            Ok(t) => Arc::new(t),
-            Err(f) => {
-                let p = Problem::of_failure(f);
-                self.set_problem(id, Some(p.clone()));
-                return problem(p);
+        let mut known = known;
+        // Nothing at its socket or its port: where it listens may have changed on the server (install.sh again,
+        // ESC-706), read again once.
+        let mut read_again = true;
+        let (welcome, tunnel) = loop {
+            let p = match Tunnel::start(&self.ssh, &known.dest, known.remote(), None) {
+                Err(f) => Problem::of_failure(f),
+                Ok(t) => {
+                    let tunnel = Arc::new(t);
+                    match tunnel.listening(tunnel::READY_WAIT).await {
+                        Err(f) => {
+                            tunnel.stop();
+                            Problem::of_failure(f)
+                        }
+                        Ok(stream) => {
+                            match client::hello(stream, tunnel.port, &self.version, &token).await {
+                                Ok(w) => break (w, tunnel),
+                                Err(r) => {
+                                    tokio::time::sleep(Duration::from_millis(300)).await;
+                                    let p = Problem::of_refusal(r, Some(&tunnel), &self.version);
+                                    tunnel.stop();
+                                    p
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            if read_again
+                && matches!(p, Problem::NoEscouade { .. })
+                && self.read_remote_again(id).await
+            {
+                read_again = false;
+                if let Some(k) = self.known(id) {
+                    known = k;
+                    continue;
+                }
             }
-        };
-        let checked = match tunnel.listening(tunnel::READY_WAIT).await {
-            Ok(stream) => client::hello(stream, tunnel.port, &self.version, &token).await,
-            Err(f) => {
-                let p = Problem::of_failure(f);
-                self.set_problem(id, Some(p.clone()));
-                return problem(p);
-            }
-        };
-        let welcome = match checked {
-            Ok(w) => w,
-            Err(r) => {
-                tokio::time::sleep(Duration::from_millis(300)).await;
-                let p = Problem::of_refusal(r, Some(&tunnel), &self.version);
-                tunnel.stop();
-                self.set_problem(id, Some(p.clone()));
-                return problem(p);
-            }
+            self.set_problem(id, Some(p.clone()));
+            return problem(p);
         };
         self.opened(id, &welcome);
         self.keep_up(id, tunnel);
@@ -1011,7 +1121,10 @@ impl Servers {
                     Some(t) => t,
                     None => {
                         let dest = match this.known(&id) {
-                            Some(k) => (k.dest, k.remote_port),
+                            Some(k) => {
+                                let remote = k.remote();
+                                (k.dest, remote)
+                            }
                             None => return,
                         };
                         let wanted = *port.lock();
@@ -1166,7 +1279,7 @@ impl Servers {
             .map(|l| *l.port.lock());
         let own = if up.is_none() {
             Some(
-                Tunnel::start(&self.ssh, &known.dest, known.remote_port, None)
+                Tunnel::start(&self.ssh, &known.dest, known.remote(), None)
                     .map_err(|e| e.output.trim().to_string())?,
             )
         } else {
@@ -1224,7 +1337,7 @@ impl Servers {
                 .filter(|l| *l.state.lock() == TunnelState::Up)
                 .map(|l| *l.port.lock());
             let own = if up.is_none() {
-                Tunnel::start(&self.ssh, &known.dest, known.remote_port, None).ok()
+                Tunnel::start(&self.ssh, &known.dest, known.remote(), None).ok()
             } else {
                 None
             };
@@ -1408,6 +1521,25 @@ fn gone() -> Problem {
             "Cette connexion n’est plus ouverte : recommence.",
             "This connection is no longer open: start again."
         ),
+    }
+}
+
+/// The socket in what `escouade-server status --json` printed (ESC-706), when the server runs on one whose path
+/// `ssh -L` can reach ([`tunnel::socket_path_ok`]); else none. What the server says is data: read, never run.
+pub fn socket_in_status(out: &str) -> Option<String> {
+    let said = out
+        .lines()
+        .rev()
+        .find_map(|l| serde_json::from_str::<crate::server::status::Said>(l.trim()).ok())?;
+    if !said.running {
+        return None;
+    }
+    let socket = said.socket?;
+    if tunnel::socket_path_ok(&socket) {
+        Some(socket)
+    } else {
+        log::warn!("servers: the server said a socket ssh -L cannot reach: its port is tried");
+        None
     }
 }
 

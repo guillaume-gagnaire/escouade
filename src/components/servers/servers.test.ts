@@ -151,6 +151,17 @@ describe('the dialog « Se connecter à un serveur »', () => {
       { kind: 'unreachable', why: 'auth', output: 'Permission denied (publickey).', command: 'ssh' },
       [/refuse la connexion SSH/, /ssh-add/],
     ],
+    [
+      // ESC-706: the server listens on a Unix socket, its SSH refuses the forward there; the fallback is the port.
+      'a forward to the socket refused',
+      {
+        kind: 'unreachable',
+        why: 'socketForwarding',
+        output: 'channel 2: open failed: administratively prohibited: open failed',
+        command: 'ssh -N -L 47831:/run/user/1000/escouade/server.sock acme-escouade',
+      },
+      [/refuse la redirection vers la socket/, /AllowStreamLocalForwarding no/, /sh install\.sh --port 46480/, /Réessayer/],
+    ],
   ];
 
   for (const [name, problem, says] of states) {
@@ -277,6 +288,13 @@ describe('the states of a server, said', () => {
     expect(screen.getByRole('alertdialog')).toHaveTextContent(
       'Escouade won’t accept a host key for you: connect once with ssh bastion-test.',
     );
+    cleanup();
+    render(ServerProblem, {
+      props: { problem: { kind: 'unreachable', why: 'socketForwarding', output: '', command: '' }, host: 'acme-escouade' },
+    });
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('acme-escouade refuses the forward to the socket');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('AllowStreamLocalForwarding no');
+    expect(screen.getByTestId('socket-fallback')).toHaveTextContent('sh install.sh --port 46480');
   });
 
   it('shows the whole space on a revoked token, with the way back to this computer', async () => {

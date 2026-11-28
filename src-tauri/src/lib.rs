@@ -351,6 +351,8 @@ pub mod server;
 #[cfg(test)]
 mod server_moves_tests;
 #[cfg(test)]
+mod server_socket_tests;
+#[cfg(test)]
 mod server_tests;
 #[cfg(test)]
 mod server_update_tests;

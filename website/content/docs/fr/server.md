@@ -9,7 +9,7 @@ Faire tourner Escouade H24 sur un serveur sans bureau, un VPS ou un conteneur, e
 
 `escouade-server` est le cœur d’Escouade sans fenêtre : les projets, les agents et leurs harness, les worktrees, le Kanban et le pilote auto, les terminaux, le serveur MCP. Il tourne sur le serveur, et Escouade sur ton poste n’en est qu’une vue : fermer le client, éteindre le poste ou couper le réseau ne touche à aucun agent.
 
-Il sert l’API distante d’Escouade sur `127.0.0.1`, port `46480`, et rien d’autre : il ne s’expose jamais lui-même. On l’atteint par un tunnel SSH (voir [Se connecter depuis ton poste](#se-connecter-depuis-ton-poste)). Il existe pour Linux x64 et arm64.
+Il sert l’API distante d’Escouade sur une socket Unix qui n’est qu’à son utilisateur (le service d’`install.sh`), ou sur `127.0.0.1`, port `46480` (l’image Docker, un proxy), et rien d’autre : il ne s’expose jamais lui-même. On l’atteint par un tunnel SSH (voir [Se connecter depuis ton poste](#se-connecter-depuis-ton-poste)). Il existe pour Linux x64 et arm64.
 
 ## Avec Docker
 
@@ -65,7 +65,9 @@ sh install.sh
 - **Ce qu’il vérifie.** Il télécharge l’archive de la release pour ta machine, vérifie sa somme SHA-256 et sa signature, faite par la même clé que les mises à jour de l’app (avec `minisign` s’il est là, sinon `openssl`). Une archive dont la signature ne tient pas est refusée, et rien n’est changé.
 - **Un service de ton utilisateur** par défaut (`systemctl --user`) : le programme dans `~/.local/share/escouade-server`, un lien dans `~/.local/bin`, le service dans `~/.config/systemd/user`. Il active `loginctl enable-linger`, pour que le service tourne aussi sans session ouverte.
 - **Un service du système** avec `sudo sh install.sh --system` : il crée l’utilisateur `escouade` (dossier `/var/lib/escouade`) s’il n’existe pas, et le service le lance. `--user <nom>` choisit un autre utilisateur.
-- **Relancé**, il ne change que ce qui diffère (une autre version, un autre service) ; à la même version, le serveur n’est pas redémarré. `--version X.Y.Z` vise une version précise.
+- **Sur une socket Unix**, par défaut : `$XDG_RUNTIME_DIR/escouade/server.sock` pour le service de ton utilisateur (`%t/escouade/server.sock` dans l’unité), `/run/escouade-server/server.sock` pour celui du système. La socket est en `0600`, dans un dossier `0700` qui n’est qu’à l’utilisateur du service : les autres comptes de la machine n’atteignent pas l’API, et ne peuvent pas prendre sa place pendant qu’elle redémarre. Escouade sur ton poste lit où elle est par SSH et y ouvre son tunnel lui-même.
+- **Sur un port**, avec `--port 46480` (ou un autre) : l’API écoute sur `127.0.0.1` de ce port. C’est pour un proxy devant le serveur, ou le repli quand le serveur SSH refuse les redirections vers une socket (voir [Dépanner le tunnel](#depanner-le-tunnel)). `--socket` la remet sur la socket.
+- **Relancé**, il ne change que ce qui diffère (une autre version, un autre service) ; à la même version, le serveur n’est pas redémarré. Il garde l’écoute du service déjà là (la socket ou le port), le dit, et n’en change qu’avec `--socket` ou `--port`. `--version X.Y.Z` vise une version précise.
 - **Le désinstaller** : `sh install.sh --uninstall` retire le service et le programme, et garde les données. `--uninstall --purge` retire aussi `~/.escouade` ; avec `--system`, l’utilisateur `escouade` et tout son dossier (les harness et leurs connexions compris).
 
 À la fin, il dit comment appairer ton poste. Avec `--system`, les commandes se lancent en tant que l’utilisateur du service : `sudo -u escouade -H escouade-server pair`.
@@ -82,15 +84,28 @@ Ni le code ni le jeton ne sont jamais écrits dans le journal.
 
 ### Le tunnel SSH
 
-C’est l’accès conseillé. Un serveur s’administre déjà par SSH, avec tes clés :
+C’est l’accès conseillé. Un serveur s’administre déjà par SSH, avec tes clés. Escouade ouvre lui-même le tunnel, par le `ssh` de ton poste : « Se connecter à un serveur », puis l’hôte SSH. Il lit d’abord par SSH où écoute le serveur (`escouade-server status --json`), sans jamais le deviner, puis :
+
+- **sur une socket** (le service d’`install.sh`) : `ssh -N -L 127.0.0.1:<port libre>:/run/user/1000/escouade/server.sock <ton serveur>` ;
+- **sur un port** (l’image Docker, `install.sh --port`) : `ssh -N -L 127.0.0.1:<port libre>:127.0.0.1:46480 <ton serveur>`.
+
+Ton poste garde le chemin de la socket à côté du port, et le relit si le serveur a changé d’écoute. Le même tunnel à la main, pour un autre client :
 
 ```sh
-ssh -N -L 46480:127.0.0.1:46480 <ton serveur>
+ssh -N -L 46480:/run/user/1000/escouade/server.sock <ton serveur>   # sur une socket
+ssh -N -L 46480:127.0.0.1:46480 <ton serveur>                       # sur un port
 ```
 
-Escouade sur ton poste vise alors `127.0.0.1:46480`, chez toi, que le tunnel porte jusqu’au serveur. Rien de nouveau n’est ouvert sur le serveur : en Docker, le port n’est publié que sur `127.0.0.1` de l’hôte (`-p 127.0.0.1:46480:46480`), jamais sur son adresse publique.
+Rien de nouveau n’est ouvert sur le serveur : en Docker, le port n’est publié que sur `127.0.0.1` de l’hôte (`-p 127.0.0.1:46480:46480`), jamais sur son adresse publique.
 
-Ses risques : qui a un compte SSH sur le serveur, ou un processus de l’hôte, atteint le port local et peut tenter de s’appairer (sans code valide, c’est refusé). La sécurité de l’accès est celle de ton SSH : des clés, pas de mot de passe.
+Ses risques : sur un port, qui a un compte sur le serveur, ou un processus de l’hôte, atteint le port local et peut tenter de s’appairer (sans code valide, c’est refusé), ou prendre le port pendant que le serveur redémarre. Sur la socket, ni l’un ni l’autre : elle n’est qu’à l’utilisateur du service. La sécurité de l’accès est celle de ton SSH : des clés, pas de mot de passe.
+
+### Dépanner le tunnel
+
+- **Le serveur SSH refuse la redirection vers la socket.** Avec `AllowStreamLocalForwarding no` dans `sshd_config` (ou `DisableForwarding yes`), Escouade dit « refuse la redirection vers la socket » et propose le repli : sur le serveur, `sh install.sh --port 46480` met le service sur le port, puis « Réessayer » passe par lui. Si tu administres le serveur SSH, `AllowStreamLocalForwarding local` permet la socket sans rien ouvrir d’autre. `AllowTcpForwarding no` refuse aussi le port : il n’y a alors pas de tunnel possible.
+- **VS Code Remote-SSH a pris le port.** Connecté au même serveur, VS Code transfère de lui-même les ports qu’il voit s’ouvrir, `46480` compris, et un autre tunnel ne peut plus l’écouter sur ton poste. Escouade prend un port libre de lui-même ; pour un tunnel à la main, choisis-en un autre (`-L 46490:…`), ou retire le transfert dans l’onglet « Ports » de VS Code (`remote.autoForwardPorts` à `false`).
+- **Windows réserve une plage de ports.** Hyper-V, WSL ou Docker Desktop réservent des plages entières : un tunnel à la main y échoue par « bind: Permission denied » ou « Address already in use », sans programme qui les tienne. `netsh interface ipv4 show excludedportrange protocol=tcp` les liste ; prends un port hors de ces plages. Escouade, lui, demande au système un port libre.
+- **« Pas d’Escouade sur le serveur ».** Rien n’écoute là où le serveur dit : il est arrêté, ou l’utilisateur SSH n’est pas celui du service (la socket n’est qu’à lui). Avec `--system`, connecte-toi en tant que l’utilisateur du service, ou lance `sudo -u escouade -H escouade-server status`.
 
 ### Un proxy TLS devant
 
@@ -155,6 +170,7 @@ Mesuré sur l’image, sur un poste x64 : le serveur au repos, ses plugins charg
 | `escouade-server devices` | Les appareils appairés |
 | `escouade-server devices revoke <id>` | Révoque un appareil |
 | `escouade-server health` | Code 0 si le serveur tourne et répond, 1 sinon (le `HEALTHCHECK` de l’image) |
+| `escouade-server status` | Ce que dit le serveur de lui-même et où écoute son API, sa socket ou son port (`--json` : ce que lit ton poste par SSH) |
 | `escouade-server update` | Met le serveur à la dernière version signée (`--to`, `--beta`, `--now`, `--check`) |
 | `escouade-server config` | La mise à jour automatique et son canal (`automatic on` ou `off`, `channel stable` ou `beta`) |
 
@@ -165,8 +181,11 @@ Chaque option a sa variable d’environnement ; l’option passe devant la varia
 | `--data-dir <dossier>` | `ESCOUADE_SERVER_DATA` | `~/.escouade` |
 | `--port <n>` | `ESCOUADE_SERVER_PORT` | `46480` |
 | `--listen <adresse>` | `ESCOUADE_SERVER_LISTEN` | `127.0.0.1` |
+| `--socket <chemin>` | `ESCOUADE_SERVER_SOCKET` | aucune (le service d’`install.sh` la donne) |
 | `--allow-host <nom>` | `ESCOUADE_SERVER_ALLOW_HOSTS` (noms séparés par des virgules) | aucun |
 | `--trust-proxy <adresse>` | `ESCOUADE_SERVER_TRUST_PROXIES` (adresses séparées par des virgules) | aucun |
 | `--debug` | aucune | éteint |
 
 `--listen` sur une autre adresse que `127.0.0.1` avertit dans le journal : ce port ne doit jamais être ouvert sur Internet.
+
+`--socket` remplace le port : `--socket` et `--port` (ou `--listen`) s’excluent, et `--socket` est refusé sous Windows. Le dossier de la socket est créé en `0700`, refusé s’il n’est pas à toi ou s’il est ouvert à d’autres ; chaque dossier au-dessus doit être à toi ou à root, et personne d’autre ne doit pouvoir le modifier, sauf un dossier collant de root (`/tmp`). Un verrou tient la socket : une socket laissée par un serveur tué est remplacée, une socket vivante jamais (« un autre serveur écoute sur … »). La socket est en `0600`, et retirée à l’arrêt propre.

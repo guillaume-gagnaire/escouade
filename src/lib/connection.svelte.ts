@@ -38,6 +38,12 @@ export interface ServerUpdate {
   command: string;
 }
 
+/**
+ * The fallback when the server's SSH refuses a forward to a Unix socket (`AllowStreamLocalForwarding no`, ESC-706):
+ * its service on a port, run on the server; the tunnel then goes to the port.
+ */
+export const SOCKET_FALLBACK = 'sh install.sh --port 46480';
+
 /** What went wrong with a server (`servers::Problem`, `docs/SERVER-UX.md` § 3). */
 export type ServerProblem =
   | { kind: 'policy'; message: string }

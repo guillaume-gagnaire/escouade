@@ -4,7 +4,7 @@ Escouade can run on your server, day and night, and this computer drive it throu
 
 ## Before you start
 
-- On the server, `escouade-server` is installed and running. It listens on its `127.0.0.1` only (port `46480` by default): nothing is opened to the Internet.
+- On the server, `escouade-server` is installed and running. It listens only on a Unix socket that is its user’s alone (the service of `install.sh`) or on its `127.0.0.1` (port `46480`): nothing is opened to the Internet.
 - This computer already connects to the server with `ssh`, with a key loaded in your SSH agent. Escouade runs this computer’s `ssh` (on Windows, the system’s OpenSSH), with your config, your agent and your known hosts. It reads, copies and keeps no key, and never types a password.
 - The simplest: a host in `~/.ssh/config`, for example:
 
@@ -18,7 +18,7 @@ Host acme-escouade
 
 1. Open Settings › “Servers” and choose “Connect to a server”. Once a server is known, the entry is also in the menu of the “+” of the projects bar.
 2. **The SSH host**: pick a host from `~/.ssh/config` (those with a pattern, like `Host *`, and those without a `HostName` are not listed), or type `user@address:port`. Change “Escouade’s port on the server” only if `escouade-server` runs with another `--port`.
-3. **The connection**: Escouade opens `ssh -N -L <local port>:127.0.0.1:46480 <host>`, then checks that Escouade answers on the server, and in which version.
+3. **The connection**: Escouade reads over SSH where the server listens (`escouade-server status --json`), then opens `ssh -N -L <local port>:<its socket> <host>`, or `ssh -N -L <local port>:127.0.0.1:46480 <host>` on a port, and checks that Escouade answers on the server, and in which version. If the SSH server refuses the forward to the socket, the dialog says so and offers the fallback: the service on a port (see [Troubleshoot the tunnel](server#troubleshoot-the-tunnel)).
 4. **The pairing**, once: on the server, run `escouade-server pair` and type the code it shows (8 characters, valid 10 minutes, for one device). Or click “run it from here over SSH”: Escouade runs it through the same connection and fills in the code. Name the space (“Work”) and this computer, as the server will see it.
 5. The window moves to the server: its projects, agents, accounts and settings are the server’s.
 

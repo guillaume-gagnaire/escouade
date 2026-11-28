@@ -9,8 +9,13 @@
 #   its channel by itself, checks it, puts it in place, stops at rest and systemd starts it again (the archive of test
 #   holds the same program: the restart then says that the version did not take, and it is not tried again);
 #   --uninstall keeps the data, --uninstall --purge removes it;
+# - its listening (ESC-706): by default on the socket /run/escouade-server/server.sock (RuntimeDirectory, 0700, the
+#   service's user's; the socket 0600; said by server-status.json and `status --json`; answered there, refused to
+#   another user); `--port N` puts it on a port (for a proxy, or the fallback); run again without --socket or --port,
+#   the listening is kept and said; `--socket` brings it back;
 # - the same with openssl alone (no minisign);
-# - a service of a user (systemctl --user, linger), installed and removed; a beta installed puts it on the beta channel.
+# - a service of a user (systemctl --user, linger), installed and removed, on its socket %t/escouade/server.sock; a
+#   beta installed puts it on the beta channel.
 #
 #   sudo sh scripts/server-install-test.sh <escouade-server, a build of development>
 #
@@ -84,11 +89,56 @@ grep -q 'sudo -u escouade -H escouade-server pair' "$work/out" || fail "install.
 grep -q 'security of this server' "$work/out" || fail "install.sh does not say where the sign-ins live"
 echo "installed as a service of the system, run by escouade, healthy"
 
+# Its socket (ESC-706): the default, in a folder of its user's alone.
+sock=/run/escouade-server/server.sock
+unit=/etc/systemd/system/escouade-server.service
+grep -q "ExecStart=.* run --socket $sock" "$unit" || { cat "$unit"; fail "the service does not listen on its socket"; }
+grep -q '^RuntimeDirectory=escouade-server' "$unit" && grep -q '^RuntimeDirectoryMode=0700' "$unit" || fail "no RuntimeDirectory 0700"
+grep -q "Listening: the Unix socket $sock" "$work/out" || { cat "$work/out"; fail "install.sh does not say the socket"; }
+grep -q "ssh -N -L 46480:$sock" "$work/out" || { cat "$work/out"; fail "install.sh does not say the tunnel to the socket"; }
+[ -S "$sock" ] || fail "no socket at $sock"
+[ "$(stat -c '%a %U' "$sock")" = "600 escouade" ] || fail "the socket is $(stat -c '%a %U' "$sock"), not 600 escouade"
+[ "$(stat -c '%a %U' /run/escouade-server)" = "700 escouade" ] || fail "its folder is $(stat -c '%a %U' /run/escouade-server)"
+grep -q "\"socket\": \"$sock\"" /var/lib/escouade/.escouade/server-status.json || fail "server-status.json does not say the socket"
+runuser -u escouade -- env HOME=/var/lib/escouade escouade-server status --json | grep -q "\"socket\":\"$sock\"" || fail "status --json does not say the socket"
+runuser -u escouade -- env HOME=/var/lib/escouade escouade-server health | grep -q "socket $sock" || fail "health does not say the socket"
+# The WebSocket of the API opens there (101), and to no other user.
+upgrade() { # <curl options…>: the HTTP code of an upgrade to the API's WebSocket
+  curl -s -o /dev/null -m 3 -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'     -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$@" || true
+}
+code=$(runuser -u escouade -- sh -c "$(command -v curl) -s -o /dev/null -m 3 -w %{http_code} -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' --unix-socket $sock http://127.0.0.1/remote" || true)
+[ "$code" = 101 ] || fail "the API's WebSocket does not open on the socket ($code)"
+code=$(runuser -u nobody -- sh -c "$(command -v curl) -s -o /dev/null -m 3 -w %{http_code} --unix-socket $sock http://127.0.0.1/remote" 2>/dev/null || true)
+[ "$code" = 000 ] || fail "another user reached the socket ($code)"
+ss -ltn 2>/dev/null | grep -q ':46480 ' && fail "a port listens besides the socket"
+echo "its socket: $sock, 0600 in a folder 0700 of escouade's, said by its status, answered there and to no other user"
+
 first=$(pid)
 sh "$install" --system >"$work/out" 2>&1 || { cat "$work/out"; fail "install.sh run again failed"; }
 grep -q "already installed" "$work/out" || { cat "$work/out"; fail "run again, it installed again"; }
 [ "$(pid)" = "$first" ] || fail "run again, it restarted the service"
-echo "run again: nothing changed (the same process $first)"
+grep -q "Listening kept as the service there does: the Unix socket $sock" "$work/out" || { cat "$work/out"; fail "run again, the listening kept is not said"; }
+echo "run again: nothing changed (the same process $first), the socket kept and said"
+
+# --port: the service on a port of 127.0.0.1 (a proxy, or the fallback of an SSH that refuses forwards to a socket).
+sh "$install" --system --port 46490 >"$work/out" 2>&1 || { cat "$work/out"; fail "install.sh --port failed"; }
+grep -q 'ExecStart=.* run --port 46490$' "$unit" || { cat "$unit"; fail "the unit is not on the port"; }
+grep -q "Listening: the port 46490 of 127.0.0.1" "$work/out" || { cat "$work/out"; fail "install.sh does not say the port"; }
+runuser -u escouade -- env HOME=/var/lib/escouade escouade-server health | grep -q 'API on 127.0.0.1:46490' || fail "unhealthy on the port"
+runuser -u escouade -- env HOME=/var/lib/escouade escouade-server status --json | grep -q '"socket"' && fail "status --json says a socket on a port"
+[ -e "$sock" ] && fail "the socket is still there on a port"
+code=$(upgrade http://127.0.0.1:46490/remote)
+[ "$code" = 101 ] || fail "the API's WebSocket does not open on the port ($code)"
+on_port=$(pid)
+sh "$install" --system >"$work/out" 2>&1 || { cat "$work/out"; fail "install.sh run again on the port failed"; }
+grep -q "Listening kept as the service there does: the port 46490 of 127.0.0.1" "$work/out" || { cat "$work/out"; fail "run again, the port is not kept"; }
+[ "$(pid)" = "$on_port" ] || fail "run again on the port, it restarted the service"
+# --socket: back on the socket.
+sh "$install" --system --socket >"$work/out" 2>&1 || { cat "$work/out"; fail "install.sh --socket failed"; }
+grep -q "run --socket $sock" "$unit" || fail "--socket did not bring the socket back"
+runuser -u escouade -- env HOME=/var/lib/escouade escouade-server health | grep -q "socket $sock" || fail "unhealthy back on the socket"
+first=$(pid)
+echo "--port 46490: on the port, kept when run again; --socket: back on the socket"
 
 sh "$install" --system --version 9.9.8 >"$work/out" 2>&1 && fail "an archive whose signature does not hold was taken"
 grep -q 'signature refused' "$work/out" || { cat "$work/out"; fail "the refusal does not say the signature"; }
@@ -191,6 +241,8 @@ echo "uninstalled with --purge: the user and its data gone"
 
 # ---------- a service of a user ----------
 
+# A user of the test, as a run cut short may have left it.
+userdel -r esc-user >/dev/null 2>&1 || true
 useradd --create-home --shell /bin/sh esc-user
 uid=$(id -u esc-user)
 loginctl enable-linger esc-user
@@ -212,6 +264,14 @@ as_user systemctl --user is-active --quiet escouade-server || fail "the user's s
 [ -f /home/esc-user/.config/systemd/user/escouade-server.service ] || fail "no unit of the user"
 as_user /home/esc-user/.local/bin/escouade-server health || fail "the user's server is not healthy"
 grep -q 'Restart=always' /home/esc-user/.config/systemd/user/escouade-server.service || fail "the unit does not restart"
+# Its socket (ESC-706): %t/escouade/server.sock, the user's runtime folder.
+grep -q 'ExecStart=.* run --socket %t/escouade/server.sock$' /home/esc-user/.config/systemd/user/escouade-server.service ||
+  fail "the user's service does not listen on its socket"
+usock=/run/user/$uid/escouade/server.sock
+[ -S "$usock" ] || fail "no socket at $usock"
+[ "$(stat -c '%a %U' "$usock")" = "600 esc-user" ] || fail "the user's socket is $(stat -c '%a %U' "$usock")"
+[ "$(stat -c '%a %U' "/run/user/$uid/escouade")" = "700 esc-user" ] || fail "the user's socket folder is not 700"
+as_user /home/esc-user/.local/bin/escouade-server status --json | grep -q "\"socket\":\"$usock\"" || fail "the user's status --json does not say its socket"
 as_user sh "$install" >"$work/out" 2>&1 && grep -q "already installed" "$work/out" || fail "run again as a user, it installed again"
 # A beta installed: the beta channel, kept in the server's settings (ESC-702).
 release 9.9.6-beta.1
@@ -224,6 +284,9 @@ as_user sh "$install" --uninstall >/dev/null || fail "uninstall as a user"
 as_user sh "$install" --uninstall --purge >/dev/null
 [ -e /home/esc-user/.escouade ] && fail "--purge left the user's data"
 loginctl disable-linger esc-user
+# Its systemd of the user ended first: userdel refuses a user that still runs something.
+loginctl terminate-user esc-user >/dev/null 2>&1 || true
+sleep 2
 userdel -r esc-user >/dev/null 2>&1 || true
 echo "a service of a user: installed (linger), healthy, idempotent, uninstalled"
 echo "install.sh: all checks passed"

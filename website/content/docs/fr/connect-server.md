@@ -4,7 +4,7 @@ Escouade peut tourner sur ton serveur, jour et nuit, et ce poste le piloter par 
 
 ## Avant de commencer
 
-- Sur le serveur, `escouade-server` est installé et lancé. Il n’écoute que sur son `127.0.0.1` (port `46480` par défaut) : rien n’est ouvert sur Internet.
+- Sur le serveur, `escouade-server` est installé et lancé. Il n’écoute que sur une socket Unix qui n’est qu’à son utilisateur (le service d’`install.sh`) ou sur son `127.0.0.1` (port `46480`) : rien n’est ouvert sur Internet.
 - Ce poste se connecte déjà au serveur par `ssh`, avec une clé chargée dans ton agent SSH. Escouade lance le `ssh` de ce poste (sous Windows, OpenSSH du système), avec ta config, ton agent et tes hôtes connus. Il ne lit, ne copie ni ne garde aucune clé, et ne tape jamais de mot de passe.
 - Le plus simple : un hôte dans `~/.ssh/config`, par exemple :
 
@@ -18,7 +18,7 @@ Host acme-escouade
 
 1. Ouvre Réglages › « Serveurs » et choisis « Se connecter à un serveur ». Dès qu’un serveur est connu, l’entrée est aussi dans le menu du « + » de la barre des projets.
 2. **L’hôte SSH** : choisis un hôte de `~/.ssh/config` (ceux à motif, comme `Host *`, et ceux sans `HostName` ne sont pas listés), ou tape `utilisateur@adresse:port`. Le « Port d’Escouade sur le serveur » ne se change que si `escouade-server` tourne avec un autre `--port`.
-3. **La connexion** : Escouade ouvre `ssh -N -L <port local>:127.0.0.1:46480 <hôte>`, puis vérifie qu’Escouade répond sur le serveur, et dans quelle version.
+3. **La connexion** : Escouade lit par SSH où écoute le serveur (`escouade-server status --json`), puis ouvre `ssh -N -L <port local>:<sa socket> <hôte>`, ou `ssh -N -L <port local>:127.0.0.1:46480 <hôte>` sur un port, et vérifie qu’Escouade répond sur le serveur, et dans quelle version. Si le serveur SSH refuse la redirection vers la socket, le dialogue le dit et propose le repli : le service sur un port (voir [Dépanner le tunnel](server#depanner-le-tunnel)).
 4. **L’appairage**, une seule fois : sur le serveur, lance `escouade-server pair` et tape le code qu’il affiche (8 caractères, valable 10 minutes, pour un seul appareil). Ou clique « le lancer d’ici par SSH » : Escouade le lance par la même connexion et remplit le code. Donne un nom à l’espace (« Travail ») et à ce poste, tel que le serveur le verra.
 5. La fenêtre passe sur le serveur : ses projets, ses agents, ses comptes et ses réglages sont ceux du serveur.
 

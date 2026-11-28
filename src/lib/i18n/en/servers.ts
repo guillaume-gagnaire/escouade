@@ -87,6 +87,13 @@ export default defineZone('servers', {
       title: '{host} refuses the forward',
       text: 'The SSH server forbids port forwarding (AllowTcpForwarding no): Escouade cannot reach its API.',
     },
+    socketForwarding: {
+      title: '{host} refuses the forward to the socket',
+      text: 'The SSH server forbids forwards to a Unix socket (AllowStreamLocalForwarding no): Escouade cannot reach the API, which listens on a socket.',
+      fallback: 'The fallback: the service on a port, to run on the server',
+      then: 'Then “Try again”: Escouade reads again where the server listens and goes through the port.',
+      copy: 'Copy the command',
+    },
     noSsh: {
       title: 'No ssh on this computer',
       text: 'Escouade runs the system’s ssh (OpenSSH), which is not installed here.',

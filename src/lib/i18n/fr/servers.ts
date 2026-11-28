@@ -89,6 +89,13 @@ export default {
       title: '{host} refuse la redirection',
       text: 'Le serveur SSH interdit les redirections de port (AllowTcpForwarding no) : Escouade ne peut pas joindre son API.',
     },
+    socketForwarding: {
+      title: '{host} refuse la redirection vers la socket',
+      text: 'Le serveur SSH interdit les redirections vers une socket Unix (AllowStreamLocalForwarding no) : Escouade ne peut pas joindre l’API, qui écoute sur une socket.',
+      fallback: 'Le repli : le service sur un port, à lancer sur le serveur',
+      then: 'Puis « Réessayer » : Escouade relit où écoute le serveur et passe par le port.',
+      copy: 'Copier la commande',
+    },
     noSsh: {
       title: 'Pas de ssh sur ce poste',
       text: 'Escouade lance le ssh du système (OpenSSH), qui n’est pas installé ici.',

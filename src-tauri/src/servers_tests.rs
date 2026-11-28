@@ -549,7 +549,8 @@ async fn each_failure_before_the_pairing_is_its_own_state() {
         } => {
             assert!(!changed);
             assert!(output.contains("Host key verification failed"), "{output}");
-            assert!(command.starts_with("ssh -N -L "), "{command}");
+            // Met as the server's status is read (ESC-706), before any tunnel.
+            assert!(command.starts_with("ssh labo-inconnu "), "{command}");
         }
         p => panic!("{p:?}"),
     }
@@ -1236,5 +1237,259 @@ async fn the_app_that_ends_leaves_no_tunnel_behind() {
             .collect();
         assert!(pids.len() >= 12, "{mode}: {pids:?}");
         all_gone(&format!("the tunnels of an app ended by {mode}"), &pids).await;
+    }
+}
+
+// ---------- ESC-706: the server on a Unix socket ----------
+
+#[test]
+fn a_tunnel_to_a_socket_forwards_to_its_path_and_a_refusal_there_is_its_own_state() {
+    let dest = Dest::parse("acme-escouade").unwrap();
+    let socket = tunnel::Remote::Socket("/run/user/1000/escouade/server.sock".into());
+    let args = tunnel::forward_args(&dest, 47831, &socket).join(" ");
+    assert!(
+        args.contains("-L 127.0.0.1:47831:/run/user/1000/escouade/server.sock"),
+        "{args}"
+    );
+    // The same safe options as to a port.
+    for o in [
+        "BatchMode=yes",
+        "StrictHostKeyChecking=yes",
+        "ExitOnForwardFailure=yes",
+        "ControlMaster=no",
+    ] {
+        assert!(args.contains(o), "{o}: {args}");
+    }
+    assert_eq!(
+        tunnel::shown_command(&dest, 47831, &socket),
+        "ssh -N -L 47831:/run/user/1000/escouade/server.sock acme-escouade"
+    );
+    // `AllowStreamLocalForwarding no`: OpenSSH says what it says of a refused port, read as a socket's for a socket.
+    let refused = "channel 2: open failed: administratively prohibited: open failed";
+    assert_eq!(tunnel::classify_for(refused, true), Why::SocketForwarding);
+    assert_eq!(tunnel::classify_for(refused, false), Why::Forwarding);
+    assert_eq!(classify(refused), Why::Forwarding);
+    assert!(
+        !Why::SocketForwarding.passing(),
+        "trying again mends nothing"
+    );
+    // No socket there (the server stopped): no Escouade, as on a port.
+    assert_eq!(
+        tunnel::classify_for(
+            "channel 2: open failed: connect failed: No such file or directory",
+            true
+        ),
+        Why::NoEscouade
+    );
+}
+
+#[test]
+fn the_socket_is_read_from_what_status_json_says_and_never_guessed() {
+    let sock = "/run/user/1000/escouade/server.sock";
+    let said =
+        serde_json::json!({ "running": true, "version": "2.3.0", "api": sock, "socket": sock });
+    assert_eq!(
+        crate::servers::socket_in_status(&format!("{said}\n")).as_deref(),
+        Some(sock)
+    );
+    // On a port, not running, an older server (its `status` unknown), something else: none, the port.
+    for out in [
+        serde_json::json!({ "running": true, "version": "2.3.0", "api": "127.0.0.1:46480" })
+            .to_string(),
+        serde_json::json!({ "running": false }).to_string(),
+        serde_json::json!({ "running": false, "socket": "/run/x/s.sock" }).to_string(),
+        "escouade-server: commande inconnue : status".to_string(),
+        String::new(),
+    ] {
+        assert_eq!(crate::servers::socket_in_status(&out), None, "{out}");
+    }
+    // A path ssh -L could not reach (a colon, a space, relative, a control character): never taken.
+    for bad in [
+        "/run/x:y/s.sock",
+        "/run/x y/s.sock",
+        "run/s.sock",
+        "/run/x/\u{7}.sock",
+    ] {
+        let out = serde_json::json!({ "running": true, "socket": bad }).to_string();
+        assert_eq!(crate::servers::socket_in_status(&out), None, "{bad}");
+    }
+}
+
+/// A stand-in of `escouade-server` on the host: `status --json` says `socket` (anything else too: the code is not
+/// asked of it).
+fn status_program(name: &str, socket: &str) -> PathBuf {
+    let dir = crate::paths::test_dir(name);
+    let said =
+        serde_json::json!({ "running": true, "version": VERSION, "api": socket, "socket": socket })
+            .to_string();
+    if cfg!(windows) {
+        let p = dir.join("status.cmd");
+        std::fs::write(&p, format!("@echo {said}\r\n")).unwrap();
+        p
+    } else {
+        let p = dir.join("status.sh");
+        std::fs::write(&p, format!("#!/bin/sh\nprintf '%s\\n' '{said}'\n")).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        p
+    }
+}
+
+/// `escouade-server` on `data`, on a Unix socket of `dir` (Unix), else on a free port that plays it (Windows): its
+/// socket's path, the port that plays it (0 on Unix), and what stops it.
+async fn started_on_a_socket(
+    data: DataDir,
+    dir: &Path,
+) -> (String, u16, tokio::sync::oneshot::Sender<()>) {
+    let path = dir.join("run").join("server.sock");
+    let endpoint = if cfg!(unix) {
+        server::Endpoint {
+            socket: Some(path.clone()),
+            ..server::Endpoint::default()
+        }
+    } else {
+        server::Endpoint::port(0)
+    };
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<Arc<RemoteApi>>();
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    tokio::spawn(async move {
+        server::serve(
+            data,
+            endpoint,
+            Limits::default(),
+            move |api| {
+                let _ = ready_tx.send(api.clone());
+            },
+            async move {
+                let _ = stop_rx.await;
+                "SIGTERM"
+            },
+        )
+        .await
+    });
+    let api = ready_rx.await.expect("the server is ready");
+    if cfg!(unix) {
+        (path.display().to_string(), 0, stop_tx)
+    } else {
+        (
+            "/run/user/1000/escouade/server.sock".into(),
+            api.addr().port(),
+            stop_tx,
+        )
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_client_reads_the_socket_by_ssh_tunnels_to_it_keeps_it_and_a_refused_forward_offers_the_port(
+) {
+    let root = crate::paths::test_dir("servers-socket");
+    let data = DataDir::new(root.join("server-data"));
+    data.ensure().unwrap();
+    let (socket, played_by, _stop) = started_on_a_socket(data.clone(), &root).await;
+    let program = status_program("servers-socket-prog", &socket);
+    let dir = root.join("ssh");
+    std::fs::create_dir_all(&dir).unwrap();
+    let ssh_with = |refuse: bool| {
+        // No port mapped: nothing listens on the server's 46480, only on its socket.
+        let mut ssh = fake_ssh(&dir, "", Some((&program, data.root())));
+        if played_by != 0 {
+            ssh.env
+                .push(("FAKE_SSH_SOCKET_PORT".into(), played_by.to_string().into()));
+        }
+        if refuse {
+            ssh.env.push(("FAKE_SSH_NO_STREAMLOCAL".into(), "1".into()));
+        }
+        ssh
+    };
+    let client = root.join("client");
+    std::fs::create_dir_all(&client).unwrap();
+    let servers = Servers::load(
+        &client,
+        Arc::new(MemoryStore::default()),
+        ssh_with(false),
+        VERSION.into(),
+        Arc::new(|_: &str| Ok(())),
+        None,
+    );
+    // Its status read by SSH, then the tunnel to the socket it said.
+    let reached = ok(servers
+        .attempt("escouade@vps.example.net", None, None)
+        .await);
+    assert_eq!(reached.version, VERSION);
+    let runs = std::fs::read_to_string(dir.join("runs.log")).unwrap();
+    assert!(runs.contains("status --json"), "{runs}");
+    assert!(
+        runs.contains(&format!(":{socket}\"")),
+        "the forward goes to the socket: {runs}"
+    );
+    // Paired through it; servers.json keeps the socket beside the port.
+    let code = pairing::create(&data, crate::model::now_ms()).unwrap();
+    let id = ok(servers
+        .pair(&reached.attempt, &code.text, "Perso", "Poste")
+        .await);
+    let known = servers.view().servers[0].known.clone();
+    assert_eq!(known.socket.as_deref(), Some(socket.as_str()));
+    assert_eq!(known.remote_port, tunnel::SERVER_PORT);
+    let saved = std::fs::read_to_string(client.join(crate::servers::FILE)).unwrap();
+    assert!(saved.contains(&socket), "{saved}");
+    // The window on it, through the socket.
+    ok(servers.open(&id).await);
+    assert_eq!(servers.link().map(|l| l.tunnel), Some(TunnelState::Up));
+    servers.leave();
+    servers.shutdown();
+    // A port typed is the user's choice: no status read, the tunnel to that port.
+    std::fs::remove_file(dir.join("runs.log")).unwrap();
+    let typed_root = root.join("client-typed");
+    std::fs::create_dir_all(&typed_root).unwrap();
+    let typed = Servers::load(
+        &typed_root,
+        Arc::new(MemoryStore::default()),
+        ssh_with(false),
+        VERSION.into(),
+        Arc::new(|_: &str| Ok(())),
+        None,
+    );
+    let closed = tunnel::free_port().unwrap();
+    assert!(matches!(
+        problem_of(
+            typed
+                .attempt("escouade@vps.example.net", Some(closed), None)
+                .await
+        ),
+        Problem::NoEscouade { .. }
+    ));
+    let runs = std::fs::read_to_string(dir.join("runs.log")).unwrap();
+    assert!(!runs.contains("status --json"), "{runs}");
+    assert!(runs.contains(&format!("127.0.0.1:{closed}")), "{runs}");
+    // The host refuses forwards to a socket (AllowStreamLocalForwarding no): its own state, with what ssh said and the
+    // command; the dialog offers the port.
+    let refused_root = root.join("client-refused");
+    std::fs::create_dir_all(&refused_root).unwrap();
+    let refused = Servers::load(
+        &refused_root,
+        Arc::new(MemoryStore::default()),
+        ssh_with(true),
+        VERSION.into(),
+        Arc::new(|_: &str| Ok(())),
+        None,
+    );
+    match problem_of(
+        refused
+            .attempt("escouade@vps.example.net", None, None)
+            .await,
+    ) {
+        Problem::Unreachable {
+            why,
+            output,
+            command,
+        } => {
+            assert_eq!(why, Why::SocketForwarding);
+            assert!(output.contains("administratively prohibited"), "{output}");
+            assert!(command.contains(&format!(":{socket} ")), "{command}");
+        }
+        p => panic!("{p:?}"),
     }
 }

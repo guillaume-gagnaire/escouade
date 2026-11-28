@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, openSettingsPage, send, test } from './fixture';
-import { serverCommand } from './server';
+import { serverCommand, startBareServer, type BareServer } from './server';
 
 test.use({ sshServer: true });
 
@@ -161,4 +161,63 @@ test('connects to a server through an SSH tunnel: pairing, an agent, a cut and b
   await expect(row).toContainText('Travail');
   await expect(row).toContainText('Jeton révoqué', { timeout: 15_000 });
   await shot(page, 'etats');
+});
+
+// ESC-706 (BC-5): the server on its Unix socket. Under Linux, a real `escouade-server --socket`; under Windows, where the
+// server has none (`--socket` is refused there), the fake `ssh` plays the socket by a port (its file `socket`:
+// `<path>=<port>`): what the client does is the same, its status read by SSH, `ssh -L` to the socket's path.
+test('reaches a server on its Unix socket, read by SSH; a forward refused there offers the port', async ({ app }) => {
+  test.setTimeout(240_000);
+  const ssh = app.ssh!;
+  const { page } = app;
+  const root = path.dirname(ssh.server.data);
+  const data = path.join(root, 'server-socket-data');
+  fs.mkdirSync(data);
+  fs.copyFileSync(path.join(app.data, 'settings.json'), path.join(data, 'settings.json'));
+  const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
+  const linux = process.platform === 'linux';
+  const socket = linux ? path.join(root, 'run', 'server.sock') : '/run/user/1000/escouade/server.sock';
+  let server: BareServer | null = null;
+  try {
+    server = linux
+      ? await startBareServer(ssh.program, data, { ...ssh.env, ESCOUADE_DATA_DIR: data }, 0, socket)
+      : await startBareServer(ssh.program, data, { ...ssh.env, ESCOUADE_DATA_DIR: data }, base ? base + 3 : 0);
+    fs.writeFileSync(path.join(ssh.dir, 'socket'), linux ? socket : `${socket}=${server.port}`);
+    // The host's SSH refuses forwards to a socket (AllowStreamLocalForwarding no): its own state, and the fallback.
+    fs.writeFileSync(path.join(ssh.dir, 'no-streamlocal'), '');
+    const settings = await openSettingsPage(page, 'Serveurs');
+    await settings.getByTestId('servers-connect').click();
+    const dialog = page.getByRole('dialog', { name: 'Se connecter à un serveur' });
+    await dialog.getByRole('radio').first().click();
+    await dialog.getByRole('button', { name: /^Se connecter/ }).click();
+    const problem = dialog.getByRole('alertdialog');
+    await expect(problem).toContainText('travail refuse la redirection vers la socket', { timeout: 30_000 });
+    await expect(problem).toContainText('AllowStreamLocalForwarding no');
+    await expect(dialog.getByTestId('socket-fallback')).toHaveText('sh install.sh --port 46480');
+    await expect(dialog.getByTestId('copy-socket-fallback')).toBeVisible();
+    await expect(problem).toContainText(`:${socket} travail`);
+    await shot(page, 'socket-refusee');
+    // Forwards allowed again: « Réessayer » reads where it listens, the tunnel goes to the socket, Escouade answers.
+    fs.rmSync(path.join(ssh.dir, 'no-streamlocal'));
+    await dialog.getByRole('button', { name: 'Réessayer' }).click();
+    await expect(dialog.getByText('Appairer ce poste à travail')).toBeVisible({ timeout: 30_000 });
+    const runs = fs.readFileSync(path.join(ssh.dir, 'runs.log'), 'utf8');
+    expect(runs).toContain('status --json');
+    // The forward goes to the socket's path: `-L 127.0.0.1:<free port>:<socket>`.
+    const forwards = runs.split('\n').filter((l) => l.includes('"-L"'));
+    expect(forwards.some((l) => /"127\.0\.0\.1:\d+:/.test(l) && l.includes(`:${socket}"`))).toBe(true);
+    // Paired by a code of the server on the socket; servers.json keeps the socket beside the port.
+    const printed = serverCommand(ssh.program, ['pair', '--data-dir', data], ssh.env);
+    const code = /([A-HJ-NP-Z2-9]{4})-([A-HJ-NP-Z2-9]{4})/.exec(printed)!;
+    await dialog.getByRole('group', { name: 'Code d’appairage, 8 caractères' }).getByRole('textbox').first().click();
+    await page.keyboard.type(code[1] + code[2]);
+    await dialog.getByRole('textbox', { name: 'Nom de l’espace' }).fill('Socket');
+    await dialog.getByRole('button', { name: /^Appairer/ }).click();
+    await expect(page.getByTestId('title-machine')).toContainText('Socket', { timeout: 60_000 });
+    const saved = JSON.parse(fs.readFileSync(path.join(app.data, 'servers.json'), 'utf8'));
+    expect(saved.servers[0]).toMatchObject({ name: 'Socket', socket, remotePort: 46480 });
+    await shot(page, 'socket');
+  } finally {
+    await server?.stop();
+  }
 });

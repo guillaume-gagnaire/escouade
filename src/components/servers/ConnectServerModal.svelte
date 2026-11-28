@@ -3,7 +3,7 @@
   // `*-erreur`): the SSH host (from ~/.ssh/config, or typed), the connection (ssh, then Escouade), the pairing the first
   // time (the code typed, or got « d'ici par SSH »), then the space opens. Every failure has its state (§ 3).
   import { onDestroy, onMount, tick } from 'svelte';
-  import type { ServerProblem as Problem } from '../../lib/connection.svelte';
+  import { SOCKET_FALLBACK, type ServerProblem as Problem } from '../../lib/connection.svelte';
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
   import { goToServer, servers, type Outcome, type Reached, type SshHost } from '../../lib/servers.svelte';
@@ -319,6 +319,11 @@
             {#if problem && problem.kind !== 'hostKey' && 'command' in problem && problem.command}
               <button class="btn ghost" onclick={() => problem && 'command' in problem && void copy(problem.command)}>
                 <Icon name={copied ? 'check' : 'term'} size={12} />{t('servers.problem.tryInTerminal')}
+              </button>
+            {/if}
+            {#if problem?.kind === 'unreachable' && problem.why === 'socketForwarding'}
+              <button class="btn" onclick={() => void copy(SOCKET_FALLBACK)} data-testid="copy-socket-fallback">
+                <Icon name={copied ? 'check' : 'copy'} size={12} />{t('servers.problem.socketForwarding.copy')}
               </button>
             {/if}
             {#if problem?.kind === 'hostKey'}

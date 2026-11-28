@@ -52,6 +52,8 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             endpoint: None,
             qr: false,
             name: None,
+            socket: None,
+            json: false,
             connector: Default::default(),
         }
     );
@@ -1055,6 +1057,7 @@ fn status_of(pid: u32, busy: Option<&str>, at: i64) -> status::Status {
         pid,
         version: VERSION.into(),
         api: "127.0.0.1:46480".into(),
+        socket: None,
         started_at: 0,
         at,
         busy: busy.map(String::from),

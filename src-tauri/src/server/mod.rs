@@ -11,6 +11,8 @@
 //! - `escouade-server team pair <serveur> <CODE> [--name <nom>]` (OE-1): the machine enters a team as a machine of the
 //!   team (the role of service), by the short code an administrator shows (`teampair`);
 //! - `escouade-server health`: whether the server of the folder runs and still answers (the image's `HEALTHCHECK`);
+//! - `escouade-server status [--json]` (ESC-706): what the server of the folder says of itself, where its API listens
+//!   (its socket or its port): what the desktop client reads by SSH, never guessing a socket's path;
 //! - `escouade-server update [--to X.Y.Z [--downgrade]] [--beta] [--now] [--check]`: the server at a signed version (`update`);
 //! - `escouade-server config [automatic on|off] [channel stable|beta]` (ESC-702): the automatic update and its channel,
 //!   the server's settings (`autoupdate`);
@@ -21,6 +23,9 @@
 //!   the core puts in `GIT_SSH_COMMAND` and `core.sshCommand`; nothing else read, nothing logged;
 //! - `--gate` (`ESCOUADE_SERVER_GATE`, RP-1): the gate of the private network on 127.0.0.1, the agents' one proxy
 //!   (`privatenet`); off by default;
+//! - `--socket <path>` (`ESCOUADE_SERVER_SOCKET`, ESC-706): the API on a Unix socket in a folder `0700` of its user's, in
+//!   place of the port (`socket`: the folder and those above checked, a lock, a dead socket replaced, `0600`); it and
+//!   `--port`/`--listen` exclude each other; refused under Windows;
 //! - `--connector-listen <adresse:port>` (`ESCOUADE_SERVER_CONNECTOR_LISTEN`, RP-4): the connectors' entry, off by
 //!   default, which speaks their protocol alone (never the remote API), and the gate with it (`privateentry`);
 //!   `--connector-cert`, `--connector-key` (a certificate of its own, else behind a TLS proxy), `--connector-url`
@@ -44,6 +49,7 @@
 pub mod autoupdate;
 pub mod logs;
 pub mod secrets;
+pub mod socket;
 pub mod status;
 pub mod teampair;
 pub mod update;
@@ -70,6 +76,8 @@ pub const PORT_VAR: &str = "ESCOUADE_SERVER_PORT";
 pub const LISTEN_VAR: &str = "ESCOUADE_SERVER_LISTEN";
 pub const HOSTS_VAR: &str = "ESCOUADE_SERVER_ALLOW_HOSTS";
 pub const PROXIES_VAR: &str = "ESCOUADE_SERVER_TRUST_PROXIES";
+/// `--socket` (ESC-706): the path of the Unix socket, in place of the port.
+pub const SOCKET_VAR: &str = "ESCOUADE_SERVER_SOCKET";
 /// `--gate` (RP-1): `1`, `true`, `on` or `yes`.
 pub const GATE_VAR: &str = "ESCOUADE_SERVER_GATE";
 /// `--browser` (BC-1): `1`, `true`, `on` or `yes`.
@@ -88,6 +96,9 @@ pub enum Command {
     Devices,
     Revoke(String),
     Health,
+    /// `status [--json]` (ESC-706): what the server of the folder says of itself, where its API listens included: what
+    /// the desktop client reads by SSH to find its socket.
+    Status,
     Update,
     /// `config …` (ESC-702): the automatic update (`automatic`) and the channel (`beta`), each when given.
     Config {
@@ -147,8 +158,34 @@ pub struct Args {
     pub qr: bool,
     /// The name of the team on this machine (`team pair --name`; else its server's address).
     pub name: Option<String>,
+    /// The Unix socket the API listens on, in place of the port (`--socket`, ESC-706): never under Windows.
+    pub socket: Option<PathBuf>,
+    /// `status --json`.
+    pub json: bool,
     /// The connectors' entry (RP-4): `--connector-listen`, its certificate, its address.
     pub connector: ConnectorArgs,
+}
+
+/// Where an option came from: the command line wins over its variable.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Given {
+    Var,
+    Flag,
+}
+
+/// `--socket` refused under Windows, in so many words.
+fn socket_of(v: &str) -> std::result::Result<PathBuf, String> {
+    if cfg!(windows) {
+        return Err(tr!(
+            "--socket : pas de socket Unix sous Windows ; le serveur y écoute sur un port (--port)",
+            "--socket: no Unix socket under Windows; the server listens on a port there (--port)"
+        ));
+    }
+    let path = PathBuf::from(v);
+    match socket::path_refusal(&path) {
+        Some(why) => Err(why),
+        None => Ok(path),
+    }
 }
 
 /// What the command line says of the connectors' entry (RP-4).
@@ -190,6 +227,8 @@ pub fn parse_with(
         endpoint: None,
         qr: false,
         name: None,
+        socket: None,
+        json: false,
         connector: ConnectorArgs::default(),
     };
     if let Some(v) = var(CONNECTOR_LISTEN_VAR) {
@@ -200,11 +239,21 @@ pub fn parse_with(
     if let Some(v) = var(CONNECTOR_URL_VAR) {
         out.connector.url = Some(connector_url_of(&v)?);
     }
+    // A port (`--port`, `--listen`) and a socket exclude each other; given on the command line, one wins over the
+    // other's variable.
+    let mut network: Option<Given> = None;
+    let mut socket: Option<Given> = None;
     if let Some(v) = var(PORT_VAR) {
         out.port = port_of(&v)?;
+        network = Some(Given::Var);
     }
     if let Some(v) = var(LISTEN_VAR) {
         out.listen = Some(ip_of(&v)?);
+        network = Some(Given::Var);
+    }
+    if let Some(v) = var(SOCKET_VAR) {
+        out.socket = Some(socket_of(&v)?);
+        socket = Some(Given::Var);
     }
     if let Some(v) = var(HOSTS_VAR) {
         for h in v.split(',').map(str::trim).filter(|h| !h.is_empty()) {
@@ -247,8 +296,19 @@ pub fn parse_with(
         };
         match flag {
             "--data-dir" => out.data_dir = Some(PathBuf::from(value("--data-dir")?)),
-            "--port" => out.port = port_of(&value("--port")?)?,
-            "--listen" => out.listen = Some(ip_of(&value("--listen")?)?),
+            "--port" => {
+                out.port = port_of(&value("--port")?)?;
+                network = Some(Given::Flag);
+            }
+            "--listen" => {
+                out.listen = Some(ip_of(&value("--listen")?)?);
+                network = Some(Given::Flag);
+            }
+            "--socket" => {
+                out.socket = Some(socket_of(&value("--socket")?)?);
+                socket = Some(Given::Flag);
+            }
+            "--json" => out.json = true,
             "--allow-host" => {
                 let v = host_of(&value("--allow-host")?)?;
                 out.hosts.push(v);
@@ -305,6 +365,7 @@ pub fn parse_with(
         ["devices"] | ["devices", "list"] => Command::Devices,
         ["devices", "revoke", id] => Command::Revoke(id.to_string()),
         ["health"] => Command::Health,
+        ["status"] => Command::Status,
         ["update"] => Command::Update,
         ["config"] => Command::Config {
             automatic: None,
@@ -366,6 +427,27 @@ pub fn parse_with(
             ))
         }
     };
+    match (network, socket) {
+        (Some(a), Some(b)) if a == b => {
+            return Err(tr!(
+                "--socket et --port (ou --listen) s’excluent : l’API écoute sur l’un ou sur l’autre",
+                "--socket and --port (or --listen) exclude each other: the API listens on one or the other"
+            ))
+        }
+        // The command line wins over the other's variable.
+        (Some(Given::Flag), Some(Given::Var)) => out.socket = None,
+        (Some(Given::Var), Some(Given::Flag)) => {
+            out.port = DEFAULT_PORT;
+            out.listen = None;
+        }
+        _ => {}
+    }
+    if out.json && out.command != Command::Status {
+        return Err(tr!(
+            "--json va avec « status »",
+            "--json goes with “status”"
+        ));
+    }
     if out.qr && out.command != Command::Pair {
         return Err(tr!("--qr va avec « pair »", "--qr goes with “pair”"));
     }
@@ -505,6 +587,7 @@ pub fn help() -> String {
          escouade-server devices            les appareils appairés\n  \
          escouade-server devices revoke ID  révoque un appareil\n  \
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
+         escouade-server status [--json]    ce que dit le serveur de lui-même, où écoute son API (sa socket ou son port)\n  \
          escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
          escouade-server config             la mise à jour automatique et son canal (automatic on|off, channel stable|beta)\n  \
          escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n  \
@@ -516,6 +599,7 @@ pub fn help() -> String {
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
          --port N            le port de l’API distante (sinon {port})\n  \
+         --socket CHEMIN     écoute sur cette socket Unix à la place du port, dans un dossier 0700 qui n’est qu’à toi (pas sous Windows)\n  \
          --listen ADRESSE    écoute sur une autre adresse que 127.0.0.1 (Docker, un tunnel, un proxy) : à ne jamais exposer sur Internet\n  \
          --allow-host NOM    accepte ce nom dans l’en-tête Host (celui d’un proxy TLS devant le serveur)\n  \
          --trust-proxy IP    lit X-Forwarded-For de ce proxy seul : chaque client y compte ses échecs à part\n  \
@@ -534,6 +618,7 @@ pub fn help() -> String {
          escouade-server devices            the paired devices\n  \
          escouade-server devices revoke ID  revokes a device\n  \
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
+         escouade-server status [--json]    what the server says of itself, where its API listens (its socket or its port)\n  \
          escouade-server update             puts the server at the latest signed version (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
          escouade-server config             the automatic update and its channel (automatic on|off, channel stable|beta)\n  \
          escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n  \
@@ -545,6 +630,7 @@ pub fn help() -> String {
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
          --port N           the port of the remote API (else {port})\n  \
+         --socket PATH      listens on this Unix socket in place of the port, in a folder 0700 that is yours alone (not under Windows)\n  \
          --listen ADDRESS   listens on another address than 127.0.0.1 (Docker, a tunnel, a proxy): never to expose to the Internet\n  \
          --allow-host NAME  takes this name in the Host header (a TLS proxy's in front of the server)\n  \
          --trust-proxy IP   reads X-Forwarded-For from this proxy alone: each client behind it counts its failures apart\n  \
@@ -639,6 +725,7 @@ pub fn main_with(args: Vec<String>, web: Web) -> i32 {
         Command::Devices => devices(&args),
         Command::Revoke(id) => revoke(&args, id),
         Command::Health => health(&args),
+        Command::Status => status_command(&args),
         Command::Update => data_of(&args).and_then(|data| update::run(&data, &args.update)),
         Command::Config { automatic, beta } => config(&args, *automatic, *beta),
         Command::Phone(what) => phone(&args, what),
@@ -885,6 +972,16 @@ fn pair(args: &Args) -> Result<()> {
             pairing::LIFETIME_MS / 60_000
         )
     );
+    // On a socket (ESC-706): Escouade finds it by SSH; the tunnel by hand, for a client of another kind.
+    if let Some(path) = status::read(&data).and_then(|s| s.socket) {
+        println!(
+            "{}",
+            tr!(
+                "L’API écoute sur la socket {path} : Escouade la trouve par SSH. Tunnel à la main : ssh -N -L {DEFAULT_PORT}:{path} <ce serveur>",
+                "The API listens on the socket {path}: Escouade finds it by SSH. A tunnel by hand: ssh -N -L {DEFAULT_PORT}:{path} <this server>"
+            )
+        );
+    }
     Ok(())
 }
 
@@ -1115,16 +1212,55 @@ fn health(args: &Args) -> Result<()> {
         ));
     };
     status::healthy(&s, crate::model::now_ms(), status::alive).map_err(|e| anyhow!(e))?;
-    println!(
-        "{}",
-        tr!(
+    // On a socket (ESC-706): it is still there, a socket. Nothing connects to it: the server would count an empty
+    // connection as a failed handshake of this machine.
+    if let Some(path) = &s.socket {
+        status::socket_there(std::path::Path::new(path)).map_err(|e| anyhow!(e))?;
+    }
+    println!("{}", running_line(&s));
+    Ok(())
+}
+
+/// `escouade-server X en marche (processus N, API sur …)`.
+fn running_line(s: &status::Status) -> String {
+    match &s.socket {
+        Some(path) => tr!(
+            "escouade-server {} en marche (processus {}, API sur la socket {path})",
+            "escouade-server {} running (process {}, API on the socket {path})",
+            s.version,
+            s.pid
+        ),
+        None => tr!(
             "escouade-server {} en marche (processus {}, API sur {})",
             "escouade-server {} running (process {}, API on {})",
             s.version,
             s.pid,
             s.api
-        )
-    );
+        ),
+    }
+}
+
+/// `status [--json]` (ESC-706): what the server of the folder says of itself, running or not. Its JSON is what the
+/// desktop client reads by SSH (`servers::read_status`): whether it runs, its version, where its API listens.
+fn status_command(args: &Args) -> Result<()> {
+    let data = data_of(args)?;
+    let now = crate::model::now_ms();
+    let s = status::read(&data).filter(|s| status::healthy(s, now, status::alive).is_ok());
+    if args.json {
+        println!("{}", serde_json::to_string(&status::Said::of(s.as_ref()))?);
+        return Ok(());
+    }
+    match s {
+        Some(s) => println!("{}", running_line(&s)),
+        None => println!(
+            "{}",
+            tr!(
+                "aucun serveur lancé sur {}",
+                "no server running on {}",
+                data.root().display()
+            )
+        ),
+    }
     Ok(())
 }
 
@@ -1181,6 +1317,7 @@ fn run(args: &Args, web: Web) -> Result<()> {
         proxies: args.proxies.clone(),
         gate: args.gate,
         page,
+        socket: args.socket.clone(),
         private: crate::privateentry::Asked {
             gate: args.gate,
             listen: args.connector.listen,
@@ -1256,6 +1393,8 @@ pub struct Endpoint {
     pub gate: bool,
     /// The page of the browser's client (`--browser`, BC-1): none by default.
     pub page: Option<Arc<Page>>,
+    /// `--socket` (ESC-706): a Unix socket in place of the port.
+    pub socket: Option<PathBuf>,
     /// The private network (RP-4): `--connector-listen` and its company (its `gate` is `--gate` too).
     pub private: crate::privateentry::Asked,
 }
@@ -1290,7 +1429,8 @@ pub async fn serve(
     let host = Arc::new(host);
     let root = data.root().to_path_buf();
     let listen = endpoint.listen;
-    let port = endpoint.port;
+    // Where the API listens, bound before the core starts: a socket or a port refused starts nothing.
+    let (listening, socket) = listening_of(&endpoint)?;
     // The process groups of agents a killed server left behind, stopped before any agent starts (as the app).
     crate::agentgroups::start(root.join("agent-groups.json"));
     let headless = Headless::start_locked(lock, data, host);
@@ -1299,10 +1439,7 @@ pub async fn serve(
     // remote windows; `escouade-server team pair` (another process) leaves its request for it.
     let teams = headless.open_teams();
     teampair::watch(teams, root.clone());
-    let api = match headless
-        .serve_remote_on(listen_on(listen, port)?, limits)
-        .await
-    {
+    let api = match headless.serve_remote_on(listening, limits).await {
         Ok(api) => api,
         Err(e) => {
             stop_core(headless).await;
@@ -1348,17 +1485,28 @@ pub async fn serve(
         });
     }
     let addr = api.addr();
-    let shown = match listen {
-        Some(ip) if !ip.is_loopback() => addr.to_string(),
-        _ => SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port()).to_string(),
+    let socket_path = socket.as_ref().map(socket_shown);
+    let shown = match (&socket_path, listen) {
+        (Some(path), _) => path.clone(),
+        (None, Some(ip)) if !ip.is_loopback() => addr.to_string(),
+        (None, _) => SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port()).to_string(),
     };
-    log::info!(
-        "escouade-server {} ready: remote API on ws://{shown}{}, data in {}, secrets in {}",
-        env!("CARGO_PKG_VERSION"),
-        crate::remoteapi::proto::PATH,
-        root.display(),
-        store.path().display()
-    );
+    match &socket_path {
+        Some(path) => log::info!(
+            "escouade-server {} ready: remote API on the socket {path} (ws://…{}), data in {}, secrets in {}",
+            env!("CARGO_PKG_VERSION"),
+            crate::remoteapi::proto::PATH,
+            root.display(),
+            store.path().display()
+        ),
+        None => log::info!(
+            "escouade-server {} ready: remote API on ws://{shown}{}, data in {}, secrets in {}",
+            env!("CARGO_PKG_VERSION"),
+            crate::remoteapi::proto::PATH,
+            root.display(),
+            store.path().display()
+        ),
+    }
     // What the app does once its core is up, but its window (ESC-128, ESC-124, ESC-133).
     let migrating = core.clone();
     tauri::async_runtime::spawn(async move { migrating.migrate_accounts().await });
@@ -1392,7 +1540,11 @@ pub async fn serve(
         log::info!("{}", first_start_hint(status::supervisor()));
     }
     // What it says of itself, for `health` and `update` beside it.
-    let writer = tauri::async_runtime::spawn(write_status(core.clone(), shown.clone()));
+    let writer = tauri::async_runtime::spawn(write_status(
+        core.clone(),
+        shown.clone(),
+        socket_path.clone(),
+    ));
     ready(&api);
     let why = match &own_update {
         Some(u) => tokio::select! {
@@ -1409,8 +1561,51 @@ pub async fn serve(
     drop(core);
     stop_core(headless).await;
     status::remove(&status_data);
+    // The socket removed at the clean stop, its lock let go (ESC-706); none under Windows.
+    #[cfg(unix)]
+    drop(socket);
+    #[cfg(not(unix))]
+    let _ = socket;
     log::info!("escouade-server: stopped");
     Ok(())
+}
+
+/// The socket bound, as `server-status.json` and the log say it.
+#[cfg(unix)]
+fn socket_shown(bound: &socket::Bound) -> String {
+    bound.path().display().to_string()
+}
+
+/// No socket under Windows: never called there.
+#[cfg(not(unix))]
+fn socket_shown(bound: &NoSocket) -> String {
+    match *bound {}
+}
+
+/// What holds a socket bound: nothing under Windows.
+#[cfg(not(unix))]
+enum NoSocket {}
+
+#[cfg(unix)]
+type SocketHeld = socket::Bound;
+#[cfg(not(unix))]
+type SocketHeld = NoSocket;
+
+/// Where the API of `endpoint` listens, bound now: its socket (`--socket`, held until the server stops) or its port.
+fn listening_of(endpoint: &Endpoint) -> Result<(Listen, Option<SocketHeld>)> {
+    match &endpoint.socket {
+        #[cfg(unix)]
+        Some(path) => {
+            let (listener, bound) = socket::bind(path)?;
+            Ok((Listen::Unix(listener), Some(bound)))
+        }
+        #[cfg(not(unix))]
+        Some(_) => bail!(tr!(
+            "--socket : pas de socket Unix sous Windows ; le serveur y écoute sur un port (--port)",
+            "--socket: no Unix socket under Windows; the server listens on a port there (--port)"
+        )),
+        None => Ok((listen_on(endpoint.listen, endpoint.port)?, None)),
+    }
 }
 
 /// In a build of development, `ESCOUADE_SERVER_TEST_VERSION`: the version the server says it is (never in a release).
@@ -1477,7 +1672,7 @@ pub fn first_start_hint(supervisor: Option<status::Supervisor>) -> String {
 
 /// `server-status.json`, written again every `status::EVERY` and as soon as what would keep a restart waiting
 /// changes (`updates::busy`, as the app's automatic restart reads it), until the task is stopped.
-async fn write_status(core: Arc<crate::core::Core>, api: String) {
+async fn write_status(core: Arc<crate::core::Core>, api: String, socket: Option<String>) {
     let updates = crate::updates::Updates::default();
     let supervisor = status::supervisor();
     let started_at = crate::model::now_ms();
@@ -1494,6 +1689,7 @@ async fn write_status(core: Arc<crate::core::Core>, api: String) {
                 pid: std::process::id(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 api: api.clone(),
+                socket: socket.clone(),
                 started_at,
                 at: now,
                 busy,
